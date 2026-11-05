@@ -55,7 +55,7 @@ export class BaselinePillView {
     this.pillEl = this.containerEl.createDiv({ cls: "refactor-lens-pill" });
     this.updatePillText(null);
     this.pillEl.addEventListener("click", (evt: MouseEvent) => {
-      this.showPillMenu(evt);
+      void this.showPillMenu(evt);
     });
   }
 

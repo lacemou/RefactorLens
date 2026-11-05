@@ -1,5 +1,5 @@
-import { ItemView, WorkspaceLeaf, Notice, MarkdownView, TFile } from "obsidian";
-import { ScratchpadManager, ScratchpadItem } from "./scratchpad-manager";
+import { App, ItemView, WorkspaceLeaf, Notice, MarkdownView, Modal } from "obsidian";
+import { ScratchpadManager } from "./scratchpad-manager";
 
 export const VIEW_TYPE_SCRATCHPAD = "refactor-lens-scratchpad-view";
 
@@ -18,7 +18,7 @@ export class ScratchpadView extends ItemView {
     this.manager = manager;
     // 监听全局数据变更，毫秒级自动刷新
     this.unsubscribeUpdate = this.manager.onUpdate(() => {
-      this.refresh();
+      void this.refresh();
     });
   }
 
@@ -50,19 +50,14 @@ export class ScratchpadView extends ItemView {
       text: "刷新",
       cls: "refactor-btn-sm",
     });
-    refreshBtn.addEventListener("click", () => this.refresh());
+    refreshBtn.addEventListener("click", () => void this.refresh());
 
     const clearBtn = btnBox.createEl("button", {
       text: "清空",
       cls: "refactor-btn-sm refactor-btn-danger",
     });
-    clearBtn.addEventListener("click", async () => {
-      if (confirm("确定要清空当前灵感抽屉中的所有素材吗？此操作无法撤销。")) {
-        const curPath = this.getRecentMarkdownView()?.file?.path;
-        await this.manager.clearAll(curPath);
-        new Notice("灵感暂存抽屉已清空");
-        await this.refresh();
-      }
+    clearBtn.addEventListener("click", () => {
+      new ClearScratchpadModal(this.app, () => void this.clearAll()).open();
     });
 
     // 当前物理存储路径提示
@@ -77,7 +72,7 @@ export class ScratchpadView extends ItemView {
     });
     this.searchInput.addEventListener("input", (e) => {
       this.currentFilter = (e.target as HTMLInputElement).value.toLowerCase();
-      this.renderItems();
+      void this.renderItems();
     });
 
     // 3. 条目列表容器
@@ -170,31 +165,26 @@ export class ScratchpadView extends ItemView {
         this.insertToActiveEditor(item.content);
       });
 
-      // 复制按钮
-      const copyBtn = cardActions.createEl("button", {
-        cls: "refactor-card-btn",
-        text: "📋 复制",
-      });
-      copyBtn.addEventListener("click", () => {
-        navigator.clipboard.writeText(item.content);
-        new Notice("已复制素材到剪贴板！");
-      });
-
       // 删除按钮
       const delBtn = cardActions.createEl("button", {
         cls: "refactor-card-btn refactor-btn-danger",
         text: "🗑 删除",
       });
-      delBtn.addEventListener("click", async () => {
-        const ok = await this.manager.deleteItem(item.id, curPath);
-        if (ok) {
-          new Notice("已从灵感抽屉移除");
-        } else {
-          new Notice("删除未完成");
-        }
-        await this.refresh();
-      });
+      delBtn.addEventListener("click", () => void this.deleteItem(item.id, curPath));
     }
+  }
+
+  private async deleteItem(id: string, currentPath?: string): Promise<void> {
+    const ok = await this.manager.deleteItem(id, currentPath);
+    new Notice(ok ? "已从灵感抽屉移除" : "删除未完成");
+    await this.refresh();
+  }
+
+  private async clearAll(): Promise<void> {
+    const currentPath = this.getRecentMarkdownView()?.file?.path;
+    await this.manager.clearAll(currentPath);
+    new Notice("灵感暂存抽屉已清空");
+    await this.refresh();
   }
 
   /**
@@ -212,5 +202,33 @@ export class ScratchpadView extends ItemView {
     editor.replaceRange(text + "\n\n", cursor);
     targetView.editor.focus(); // 主动将光标焦点移回正文编辑区
     new Notice("已成功插入正文！");
+  }
+}
+
+class ClearScratchpadModal extends Modal {
+  private onConfirm: () => void;
+
+  constructor(app: App, onConfirm: () => void) {
+    super(app);
+    this.onConfirm = onConfirm;
+  }
+
+  onOpen(): void {
+    this.setTitle("清空灵感暂存抽屉？");
+    this.contentEl.createEl("p", { text: "所有暂存素材都会被移除，此操作无法撤销。" });
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    actions
+      .createEl("button", { text: "取消" })
+      .addEventListener("click", () => this.close());
+    actions
+      .createEl("button", { text: "确认清空", cls: "mod-warning" })
+      .addEventListener("click", () => {
+        this.close();
+        this.onConfirm();
+      });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
   }
 }

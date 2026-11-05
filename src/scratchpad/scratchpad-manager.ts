@@ -1,4 +1,4 @@
-import { App, TFile, Notice, normalizePath } from "obsidian";
+import { App, TFile, normalizePath } from "obsidian";
 import * as path from "path";
 
 export interface ScratchpadItem {

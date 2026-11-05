@@ -1,11 +1,12 @@
 {
   "name": "obsidian-refactor-lens",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "RefactorLens Obsidian Plugin - Word-style Track Changes & Codex In-place Assistant",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "lint": "eslint .",
     "test": "node tests/run_tests.js"
   },
   "keywords": [
@@ -22,13 +23,16 @@
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",
     "@types/node": "^20.14.0",
-    "builtin-modules": "^3.3.0",
     "esbuild": "^0.21.4",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.4.2",
     "obsidian": "latest",
     "tslib": "^2.6.3",
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
     "diff-match-patch": "^1.0.5"
   }
 }

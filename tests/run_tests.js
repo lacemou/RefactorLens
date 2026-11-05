@@ -285,7 +285,14 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   assert("红色删除文字支持用户划选 (cursor: text)", css.includes("cursor: text !important"));
   assert("样式表中不包含 border-left: 竖线", !css.includes("border-left:"));
   assert("已删除段落卡片具备 pre-wrap 换行还原", css.includes(".refactor-para-text") && css.includes("white-space: pre-wrap !important"));
-  assert("弹窗打开时 CSS 强制锁定隐藏选区气泡", css.includes("body:has(.refactor-copilot-modal-root) .refactor-selection-popover"));
+  const floatingSource = fs.readFileSync(path.join(__dirname, "../src/ui/floating-copilot.ts"), "utf-8");
+  assert(
+    "弹窗打开时由状态管理器移除选区气泡，且不使用高开销 :has 选择器",
+    css.includes(".refactor-is-hidden") &&
+      !css.includes(":has(") &&
+      floatingSource.includes("if (active) {") &&
+      floatingSource.includes("this.hideSelectionPopover();")
+  );
   assert("支持单段 hover 工具条与多选批量暂存样式", css.includes(".refactor-para-hover-actions") && css.includes(".refactor-btn-batch-save"));
 }
 

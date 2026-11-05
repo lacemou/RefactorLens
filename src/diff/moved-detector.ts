@@ -32,7 +32,7 @@ export class MovedBlockDetector {
    * 清理 Markdown 标记、标点与多余空白，提取纯正文语义字符
    */
   public cleanText(str: string): string {
-    return str.replace(/[#*`>\-_0-9\.\s，。、“”《》！？：；（）()\[\]【】\/\\]/g, "");
+    return str.replace(/[^\p{L}\p{M}]/gu, "");
   }
 
   /**

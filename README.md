@@ -6,7 +6,7 @@
 
 RefactorLens is built for writers who keep multiple Markdown drafts and want to review revisions without turning their notes into raw diff output or CriticMarkup. It overlays additions, deletions, and likely paragraph moves directly in the active Obsidian editor while keeping the underlying Markdown clean.
 
-> RefactorLens is currently an early preview (`0.1.0`). It is desktop-only and has not yet been submitted to the Obsidian Community Plugins directory.
+> RefactorLens is currently an early preview (`0.1.1`). It is desktop-only and is being prepared for Obsidian Community Plugins review.
 
 ## Features
 
@@ -47,8 +47,12 @@ Codex rewriting requires a locally installed and authenticated [OpenAI Codex CLI
 RefactorLens has no telemetry or analytics.
 
 - The plugin does not read or store Codex credential files.
+- The plugin does not access the system clipboard.
 - Without Codex rewriting, note comparison and scratchpad operations stay inside Obsidian and the local vault.
+- The baseline picker enumerates Markdown file paths in the current vault only when you open it, so it can present files available for comparison.
 - When you request a Codex rewrite, the selected text, your instruction, and up to 500 characters from an optional style benchmark are passed to the local Codex CLI. The CLI may then communicate with OpenAI according to its own configuration and privacy terms.
+- To provide this opt-in desktop feature, the plugin launches the exact Codex CLI executable directly without a shell. That child process inherits the local user's permissions. It runs only after an explicit rewrite request or connection test.
+- Node.js filesystem access is limited to locating the configured Codex executable, managing a private temporary output directory, and reading an optional style benchmark when you explicitly configure an absolute path outside the vault.
 - Rewrite prompts are passed through the child process's standard input rather than saved as plaintext prompt files.
 - Final CLI output uses a private temporary directory and is removed after the request finishes.
 - Scratchpad entries are ordinary Markdown stored in the vault.
@@ -56,7 +60,7 @@ RefactorLens has no telemetry or analytics.
 
 ## Requirements
 
-- Obsidian desktop `1.4.0` or later.
+- Obsidian desktop `1.13.0` or later.
 - macOS or Windows. Linux may work but is not yet an officially tested target.
 - Codex CLI is optional and only required for AI rewriting.
 
@@ -106,6 +110,15 @@ npm run build
 
 The production build generates `main.js`. The test suite is self-contained and does not require private vault files or Codex credentials.
 
+## Verifying release provenance
+
+Release assets from `0.1.1` onward are built by GitHub Actions and receive GitHub artifact attestations. After downloading an asset, verify it with the [GitHub CLI](https://cli.github.com/):
+
+```bash
+gh attestation verify main.js -R lacemou/RefactorLens
+gh attestation verify styles.css -R lacemou/RefactorLens
+```
+
 ## Security reports
 
 Please avoid including private note content, credentials, or personal paths in a public issue. Use a minimal reproduction and redact sensitive material.
@@ -122,7 +135,7 @@ Please avoid including private note content, credentials, or personal paths in a
 
 它面向保留多版 Markdown 稿件的写作者：无需打开程序员式 Diff，也无需向正文写入 CriticMarkup，就能在当前编辑器里查看新增、删除和疑似搬迁的段落。
 
-> RefactorLens 目前是早期预览版（`0.1.0`），仅支持桌面端，尚未提交到 Obsidian Community Plugins。
+> RefactorLens 目前是早期预览版（`0.1.1`），仅支持桌面端，正在准备接受 Obsidian Community Plugins 审核。
 
 ## 功能
 
@@ -163,8 +176,12 @@ Please avoid including private note content, credentials, or personal paths in a
 RefactorLens 不包含遥测或数据分析。
 
 - 插件不读取、不保存 Codex 凭据文件。
+- 插件不访问系统剪贴板。
 - 不使用 Codex 改写时，文稿比对和灵感暂存只在 Obsidian 与本地 Vault 内进行。
+- 仅当你打开底稿选择器时，插件会枚举当前 Vault 内的 Markdown 文件路径，用于列出可选底稿。
 - 发起 Codex 改写时，选中文字、改写指令，以及可选文风标杆的前 500 个字符会传给本地 Codex CLI；CLI 可能依据自身配置和隐私条款与 OpenAI 通信。
+- 为提供这项主动触发的桌面端功能，插件会直接启动指定的 Codex CLI 可执行文件，不经过 Shell。该子进程继承当前用户权限，仅在你主动发起改写或连接测试时运行。
+- Node.js 文件系统访问仅用于定位 Codex 可执行文件、管理独立临时输出目录，以及在你明确配置 Vault 外绝对路径时读取可选文风标杆。
 - 改写提示词通过子进程标准输入传递，不保存为明文提示词文件。
 - CLI 最终输出使用独立临时目录，并在请求完成后删除。
 - 灵感抽屉内容以普通 Markdown 文件保存在 Vault 中。
@@ -172,7 +189,7 @@ RefactorLens 不包含遥测或数据分析。
 
 ## 环境要求
 
-- Obsidian 桌面版 `1.4.0` 或更高版本。
+- Obsidian 桌面版 `1.13.0` 或更高版本。
 - 正式目标平台为 macOS 和 Windows；Linux 尚未作为正式测试平台。
 - Codex CLI 仅在使用 AI 改写时需要安装。
 
@@ -221,6 +238,15 @@ npm run build
 ```
 
 生产构建会生成 `main.js`。测试用例完全自包含，不依赖私人 Vault 文件或 Codex 凭据。
+
+## 验证发布产物来源
+
+从 `0.1.1` 起，发布产物由 GitHub Actions 构建，并生成 GitHub 产物证明。下载后可使用 [GitHub CLI](https://cli.github.com/) 验证：
+
+```bash
+gh attestation verify main.js -R lacemou/RefactorLens
+gh attestation verify styles.css -R lacemou/RefactorLens
+```
 
 ## 安全问题反馈
 

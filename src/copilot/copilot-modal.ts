@@ -70,13 +70,13 @@ export class InPlaceCopilotModal extends Modal {
       cls: "refactor-copilot-submit-btn",
     });
     submitBtn.addEventListener("click", () => {
-      this.executeRewrite(this.inputEl.value.trim() || "润色并使其更自然");
+      void this.executeRewrite(this.inputEl.value.trim() || "润色并使其更自然");
     });
 
     this.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        this.executeRewrite(this.inputEl.value.trim() || "润色并使其更自然");
+        void this.executeRewrite(this.inputEl.value.trim() || "润色并使其更自然");
       }
     });
 
@@ -96,7 +96,7 @@ export class InPlaceCopilotModal extends Modal {
       });
       pillBtn.addEventListener("click", () => {
         this.inputEl.value = p.label;
-        this.executeRewrite(p.instruction);
+        void this.executeRewrite(p.instruction);
       });
     }
 
@@ -105,9 +105,9 @@ export class InPlaceCopilotModal extends Modal {
 
     // 5. 待决对比区域
     this.resultContainer = contentEl.createDiv({ cls: "refactor-copilot-result-box" });
-    this.resultContainer.style.display = "none";
+    this.resultContainer.addClass("refactor-is-hidden");
 
-    setTimeout(() => this.inputEl.focus(), 80);
+    window.setTimeout(() => this.inputEl.focus(), 80);
   }
 
   onClose() {
@@ -129,7 +129,7 @@ export class InPlaceCopilotModal extends Modal {
     this.isGenerating = true;
     this.statusEl.setText("⚡ 正在召集 Codex 改写顾问...");
     this.statusEl.addClass("refactor-copilot-loading");
-    this.resultContainer.style.display = "none";
+    this.resultContainer.addClass("refactor-is-hidden");
 
     try {
       const rawCandidates = await this.codexEngine.rewrite({
@@ -155,7 +155,7 @@ export class InPlaceCopilotModal extends Modal {
 
   private renderCurrentCandidate() {
     this.resultContainer.empty();
-    this.resultContainer.style.display = "block";
+    this.resultContainer.removeClass("refactor-is-hidden");
 
     if (this.candidates.length === 0) {
       this.resultContainer.createDiv({ text: "未生成有效改写建议", cls: "refactor-text-muted" });
@@ -186,10 +186,10 @@ export class InPlaceCopilotModal extends Modal {
     // 对比区
     const diffPreview = this.resultContainer.createDiv({ cls: "refactor-copilot-diff-preview" });
     const oldSpan = diffPreview.createDiv({ cls: "refactor-preview-old" });
-    oldSpan.innerHTML = `<span class="refactor-diff-deleted">${escapeHtml(this.selectedText)}</span>`;
+    oldSpan.createSpan({ cls: "refactor-diff-deleted", text: this.selectedText });
 
     const newSpan = diffPreview.createDiv({ cls: "refactor-preview-new" });
-    newSpan.innerHTML = `<span class="refactor-diff-added">${escapeHtml(currentText)}</span>`;
+    newSpan.createSpan({ cls: "refactor-diff-added", text: currentText });
 
     // 快捷分句胶囊栏：直接将改写句切分为逻辑半句，点一下直接采纳该半句，无需手动费力划选！
     const clauses = this.splitIntoClauses(currentText);
@@ -210,19 +210,21 @@ export class InPlaceCopilotModal extends Modal {
           currentMergedText = this.computeHalfSentenceMerge(this.selectedText, currentText, clause);
           partialTitle.setText(`✨ 已捕获所选分句：“${clause.length > 15 ? clause.slice(0, 15) + "..." : clause}”`);
           partialBody.innerText = currentMergedText;
-          partialCard.style.display = "block";
-          actionRow.style.display = "none";
+          partialCard.removeClass("refactor-is-hidden");
+          actionRow.addClass("refactor-is-hidden");
         });
       }
     }
 
     // 半句采纳提示引导
     const subHint = this.resultContainer.createDiv({ cls: "refactor-copilot-selection-guide" });
-    subHint.innerHTML = `✨ <b>支持仅采纳半句</b>：可在上方绿色改写句中直接鼠标划选，或直接点击上方胶囊，自动智能拼接！`;
+    subHint.appendText("✨ ");
+    subHint.createEl("strong", { text: "支持仅采纳半句" });
+    subHint.appendText("：可在上方绿色改写句中直接鼠标划选，或直接点击上方胶囊，自动智能拼接！");
 
     // 专属的“仅采纳所选半句”智能融合卡片（平时隐藏，划选时自动浮现）
     const partialCard = this.resultContainer.createDiv({ cls: "refactor-partial-preview-card" });
-    partialCard.style.display = "none";
+    partialCard.addClass("refactor-is-hidden");
 
     const partialHeader = partialCard.createDiv({ cls: "refactor-partial-header" });
     const partialTitle = partialHeader.createSpan({ cls: "refactor-partial-title" });
@@ -259,7 +261,7 @@ export class InPlaceCopilotModal extends Modal {
     });
     acceptBtn.title = "直接将选中的原句替换为改写后的新句";
     acceptBtn.addEventListener("click", () => {
-      this.applyRewrite(currentText, false);
+      void this.applyRewrite(currentText, false);
     });
 
     // 2. 采纳并备份原句到抽屉
@@ -269,7 +271,7 @@ export class InPlaceCopilotModal extends Modal {
     });
     acceptAndSaveBtn.title = "将新句写入正文，同时把你原来写的旧句安全备份到灵感抽屉，不怕误删，日后可随时拖回！";
     acceptAndSaveBtn.addEventListener("click", () => {
-      this.applyRewrite(currentText, true);
+      void this.applyRewrite(currentText, true);
     });
 
     // 3. 放弃 (Esc)
@@ -284,7 +286,11 @@ export class InPlaceCopilotModal extends Modal {
 
     // 提示说明卡
     const hintBox = this.resultContainer.createDiv({ cls: "refactor-copilot-hint-box" });
-    hintBox.innerHTML = `💡 <b>提示</b>：『替换并把原句存入抽屉』会将你的原句安全备份到灵感抽屉，不怕误删，日后可随时拖回；按 <b>Esc</b> 键可直接退出，原文保持原样。`;
+    hintBox.appendText("💡 ");
+    hintBox.createEl("strong", { text: "提示" });
+    hintBox.appendText("：『替换并把原句存入抽屉』会将你的原句安全备份到灵感抽屉，不怕误删，日后可随时拖回；按 ");
+    hintBox.createEl("strong", { text: "Esc" });
+    hintBox.appendText(" 键可直接退出，原文保持原样。");
 
     let currentMergedText: string | null = null;
 
@@ -292,15 +298,15 @@ export class InPlaceCopilotModal extends Modal {
       const sel = window.getSelection();
       const selText = sel ? sel.toString().trim() : "";
 
-      const cleanSel = selText.replace(/[\*#_`]/g, "").trim();
-      const cleanCurrent = currentText.replace(/[\*#_`]/g, "").trim();
+      const cleanSel = selText.replace(/[*#_`]/g, "").trim();
+      const cleanCurrent = currentText.replace(/[*#_`]/g, "").trim();
 
       if (cleanSel && cleanSel.length >= 2 && cleanCurrent.includes(cleanSel) && cleanSel !== cleanCurrent) {
         currentMergedText = this.computeHalfSentenceMerge(this.selectedText, currentText, cleanSel);
         partialTitle.setText(`✨ 已划选所选半句：“${cleanSel.length > 15 ? cleanSel.slice(0, 15) + "..." : cleanSel}”`);
         partialBody.innerText = currentMergedText;
-        partialCard.style.display = "block";
-        actionRow.style.display = "none";
+        partialCard.removeClass("refactor-is-hidden");
+        actionRow.addClass("refactor-is-hidden");
       }
     };
 
@@ -310,28 +316,28 @@ export class InPlaceCopilotModal extends Modal {
 
     cancelPartialBtn.addEventListener("click", () => {
       currentMergedText = null;
-      partialCard.style.display = "none";
-      actionRow.style.display = "flex";
+      partialCard.addClass("refactor-is-hidden");
+      actionRow.removeClass("refactor-is-hidden");
       window.getSelection()?.removeAllRanges();
     });
 
     confirmPartialBtn.addEventListener("click", () => {
       const finalMerged = partialBody.innerText.trim() || currentMergedText || currentText;
-      this.applyRewrite(finalMerged, false);
+      void this.applyRewrite(finalMerged, false);
     });
 
     saveOldPartialBtn.addEventListener("click", () => {
       const finalMerged = partialBody.innerText.trim() || currentMergedText || currentText;
-      this.applyRewrite(finalMerged, true);
+      void this.applyRewrite(finalMerged, true);
     });
 
     this.scope.register([], "Enter", () => {
-      if (currentMergedText && partialCard.style.display !== "none") {
+      if (currentMergedText && !partialCard.hasClass("refactor-is-hidden")) {
         const finalMerged = partialBody.innerText.trim() || currentMergedText;
-        this.applyRewrite(finalMerged, false);
+        void this.applyRewrite(finalMerged, false);
         return false;
-      } else if (this.resultContainer.style.display !== "none") {
-        this.applyRewrite(currentText, false);
+      } else if (!this.resultContainer.hasClass("refactor-is-hidden")) {
+        void this.applyRewrite(currentText, false);
         return false;
       }
       return true;
@@ -349,7 +355,7 @@ export class InPlaceCopilotModal extends Modal {
   public splitIntoClauses(text: string): string[] {
     return text
       .split(/[，,：:；;！!？?\n]+/)
-      .map((c) => c.replace(/[\*#_`]/g, "").trim())
+      .map((c) => c.replace(/[*#_`]/g, "").trim())
       .filter((c) => c.length >= 2);
   }
 
@@ -443,8 +449,4 @@ export class InPlaceCopilotModal extends Modal {
     new Notice("已成功采纳改写！");
     this.close();
   }
-}
-
-function escapeHtml(text: string) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

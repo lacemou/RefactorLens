@@ -1,5 +1,9 @@
 /* RefactorLens (文案透镜) - Word 风格纯净修订模式样式表 */
 
+.refactor-is-hidden {
+  display: none;
+}
+
 /* 顶部常驻版本透镜小药丸 (Baseline Pill) */
 .refactor-lens-pill {
   position: absolute;
@@ -876,16 +880,6 @@
   animation: refactor-popover-in 0.15s ease-out;
 }
 
-/* 当有任何弹窗打开时，绝对强制隐藏选区气泡，杜绝任何图层重叠遮挡 */
-body:has(.refactor-copilot-modal-root) .refactor-selection-popover,
-body:has(.modal-container) .refactor-selection-popover,
-.modal-container ~ .refactor-selection-popover {
-  display: none !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  visibility: hidden !important;
-}
-
 @keyframes refactor-popover-in {
   from {
     opacity: 0;
@@ -943,6 +937,11 @@ body:has(.modal-container) .refactor-selection-popover,
   transition: all 0.2s ease;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.refactor-ball-menu {
+  right: 25px;
+  bottom: 75px;
 }
 
 .refactor-floating-ball:hover {

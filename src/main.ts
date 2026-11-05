@@ -1,5 +1,6 @@
 import { Plugin, MarkdownView, TFile, Notice, WorkspaceLeaf, Editor, Menu } from "obsidian";
 import { EditorView } from "@codemirror/view";
+import * as fs from "fs";
 import { CopywritingComparator } from "./diff/comparator";
 import { MovedBlockDetector } from "./diff/moved-detector";
 import { refactorLensField, setRefactorDiffEffect, registerDeletedTextSaveHandler } from "./ui/cm-decorations";
@@ -37,7 +38,6 @@ export default class RefactorLensPlugin extends Plugin {
 
     // 监听灵感抽屉变更事件，实现零延迟全局自动静默刷新（无论来自哪里的改写或暂存）
     this.scratchpadManager.onUpdate(() => {
-      this.refreshAllScratchpadBadges();
       this.refreshScratchpadViews();
     });
 
@@ -45,14 +45,8 @@ export default class RefactorLensPlugin extends Plugin {
     this.registerEditorExtension([refactorLensField]);
 
     // 2. 注册已删除红字的一键暂存全局回调 (就近保存在当前文稿同级目录)
-    registerDeletedTextSaveHandler(async (deletedText: string) => {
-      const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-      const fileName = activeView?.file?.basename || "已删除文字";
-      const curPath = activeView?.file?.path;
-      await this.scratchpadManager.addItem(deletedText, fileName, curPath);
-      new Notice("📦 已成功将删除文字暂存至当前文章的灵感抽屉！");
-      this.refreshAllScratchpadBadges();
-      this.refreshScratchpadViews();
+    registerDeletedTextSaveHandler((deletedText: string) => {
+      void this.saveDeletedText(deletedText);
     });
 
     // 3. 注册灵感暂存抽屉侧边栏视图
@@ -66,43 +60,38 @@ export default class RefactorLensPlugin extends Plugin {
 
     // 5. 注册左侧 Ribbon 图标：一键打开灵感暂存抽屉
     this.addRibbonIcon("archive", "RefactorLens: 打开灵感暂存抽屉", () => {
-      this.activateScratchpadView();
+      void this.activateScratchpadView();
     });
 
     // 6. 注册选区跟随浮动小胶囊 + 右下角悬浮球
     this.floatingCopilot = new FloatingCopilotManager(this.app, {
       onTriggerCopilot: (editor, view) => {
-        this.openCopilotModal(editor, view);
+        void this.openCopilotModal(editor, view);
       },
-      onSaveToScratchpad: async (editor, view) => {
+      onSaveToScratchpad: (editor, view) => {
         const selection = editor.getSelection().trim();
         if (selection) {
-          const fileName = view.file?.basename || "当前文稿";
-          const curPath = view.file?.path;
-          await this.scratchpadManager.addItem(selection, fileName, curPath);
-          new Notice("📦 已成功暂存至当前文稿的灵感抽屉！");
-          this.refreshAllScratchpadBadges();
-          this.refreshScratchpadViews();
+          void this.saveSelection(selection, view);
         }
       },
+      onSaveDeletedSelection: (text, view) => {
+        void this.saveSelection(text, view);
+      },
       onOpenScratchpad: () => {
-        this.activateScratchpadView();
+        void this.activateScratchpadView();
       },
       isCodexReady: async () => {
         const detect = await this.codexEngine.detectCodexPath();
         return detect.available;
       },
       onOpenSettings: () => {
-        // @ts-ignore
-        this.app.setting.open();
-        // @ts-ignore
-        this.app.setting.openTabById("refactor-lens");
+        new Notice("请打开 Obsidian 设置 → 第三方插件 → Refactor Lens。");
       },
     });
 
     // 7. 注册命令与快捷键
     this.addCommand({
-      id: "toggle-refactor-lens",
+      id: "toggle-lens",
       name: "切换/关闭当前文档的文案修订透镜",
       checkCallback: (checking: boolean) => {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -119,31 +108,21 @@ export default class RefactorLensPlugin extends Plugin {
     this.addCommand({
       id: "open-inline-copilot",
       name: "呼出行内 Codex 改写顾问",
-      hotkeys: [
-        { modifiers: ["Mod", "Shift"], key: "k" },
-        { modifiers: ["Mod"], key: "k" },
-      ],
       editorCallback: (editor: Editor, view: MarkdownView) => {
-        this.openCopilotModal(editor, view);
+        void this.openCopilotModal(editor, view);
       },
     });
 
     this.addCommand({
       id: "save-to-scratchpad",
       name: "将选中文本暂存至灵感抽屉",
-      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "p" }],
-      editorCallback: async (editor: Editor, view: MarkdownView) => {
+      editorCallback: (editor: Editor, view: MarkdownView) => {
         const selection = editor.getSelection().trim();
         if (!selection) {
           new Notice("请先鼠标选中文本后再进行暂存！");
           return;
         }
-        const fileName = view.file?.basename || "当前文稿";
-        const curPath = view.file?.path;
-        await this.scratchpadManager.addItem(selection, fileName, curPath);
-        new Notice("📦 已成功暂存至灵感抽屉！");
-        this.refreshAllScratchpadBadges();
-        this.refreshScratchpadViews();
+        void this.saveSelection(selection, view);
       },
     });
 
@@ -151,7 +130,7 @@ export default class RefactorLensPlugin extends Plugin {
       id: "open-scratchpad-view",
       name: "打开灵感暂存抽屉侧边栏",
       callback: () => {
-        this.activateScratchpadView();
+        void this.activateScratchpadView();
       },
     });
 
@@ -162,24 +141,19 @@ export default class RefactorLensPlugin extends Plugin {
         if (selection) {
           menu.addItem((item) => {
             item
-              .setTitle("✨ 行内呼出 Codex 改写顾问 (Mod+Shift+K)")
+              .setTitle("✨ 行内呼出 Codex 改写顾问")
               .setIcon("wand")
               .onClick(() => {
-                this.openCopilotModal(editor, view);
+                void this.openCopilotModal(editor, view);
               });
           });
 
           menu.addItem((item) => {
             item
-              .setTitle("📦 暂存至灵感抽屉 (Mod+Shift+P)")
+              .setTitle("📦 暂存至灵感抽屉")
               .setIcon("archive")
-              .onClick(async () => {
-                const fileName = view.file?.basename || "当前文稿";
-                const curPath = view.file?.path;
-                await this.scratchpadManager.addItem(selection, fileName, curPath);
-                new Notice("📦 已成功暂存至灵感抽屉！");
-                this.refreshAllScratchpadBadges();
-                this.refreshScratchpadViews();
+              .onClick(() => {
+                void this.saveSelection(selection, view);
               });
           });
         }
@@ -197,19 +171,17 @@ export default class RefactorLensPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("editor-change", (editor, view) => {
         if (view instanceof MarkdownView) {
-          this.refreshDiffForView(view);
+          void this.refreshDiffForView(view);
         }
       })
     );
 
     this.app.workspace.onLayoutReady(() => {
-      const activeLeaf = this.app.workspace.activeLeaf;
-      if (activeLeaf) {
-        this.handleActiveLeafChange(activeLeaf);
+      const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (activeView) {
+        this.handleActiveLeafChange(activeView.leaf);
       }
     });
-
-    console.log("RefactorLens (文案透镜) 插件已就绪。");
   }
 
   onunload() {
@@ -222,22 +194,35 @@ export default class RefactorLensPlugin extends Plugin {
     if (this.floatingCopilot) {
       this.floatingCopilot.destroy();
     }
-    console.log("RefactorLens (文案透镜) 插件已卸载。");
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const savedData: unknown = await this.loadData();
+    const savedSettings = this.isSettingsData(savedData) ? savedData : {};
+    this.settings = { ...DEFAULT_SETTINGS, ...savedSettings };
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
   }
 
-  public refreshAllScratchpadBadges() {
-    for (const pill of this.pillViews.values()) {
-      // @ts-ignore
-      if (pill.updateScratchpadCount) pill.updateScratchpadCount();
-    }
+  private async saveDeletedText(deletedText: string): Promise<void> {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const fileName = activeView?.file?.basename || "已删除文字";
+    await this.scratchpadManager.addItem(deletedText, fileName, activeView?.file?.path);
+    new Notice("📦 已成功将删除文字暂存至当前文章的灵感抽屉！");
+    this.refreshScratchpadViews();
+  }
+
+  private async saveSelection(selection: string, view: MarkdownView): Promise<void> {
+    const fileName = view.file?.basename || "当前文稿";
+    await this.scratchpadManager.addItem(selection, fileName, view.file?.path);
+    new Notice("📦 已成功暂存至灵感抽屉！");
+    this.refreshScratchpadViews();
+  }
+
+  private isSettingsData(value: unknown): value is Partial<RefactorLensSettings> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
   public async activateScratchpadView() {
@@ -255,7 +240,7 @@ export default class RefactorLensPlugin extends Plugin {
     }
 
     if (leaf) {
-      workspace.revealLeaf(leaf);
+      await workspace.revealLeaf(leaf);
       this.refreshScratchpadViews();
     }
   }
@@ -264,7 +249,7 @@ export default class RefactorLensPlugin extends Plugin {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_SCRATCHPAD);
     for (const l of leaves) {
       if (l.view instanceof ScratchpadView) {
-        l.view.refresh();
+        void l.view.refresh();
       }
     }
   }
@@ -275,19 +260,22 @@ export default class RefactorLensPlugin extends Plugin {
       const p = this.settings.benchmarkVaultPath;
       if (p.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(p)) {
         try {
-          const fs = require("fs");
           if (fs.existsSync(p)) {
-            const raw = fs.readFileSync(p, "utf-8");
+            const raw = await fs.promises.readFile(p, "utf-8");
             styleContext = raw.slice(0, 500);
           }
-        } catch (_) {}
+        } catch (error) {
+          console.warn("Refactor Lens 无法读取外部文风标杆文件:", error);
+        }
       } else {
         const bFile = this.app.vault.getAbstractFileByPath(p);
         if (bFile instanceof TFile) {
           try {
             const raw = await this.app.vault.read(bFile);
             styleContext = raw.slice(0, 500);
-          } catch (_) {}
+          } catch (error) {
+            console.warn("Refactor Lens 无法读取 Vault 文风标杆文件:", error);
+          }
         }
       }
     }
@@ -307,21 +295,11 @@ export default class RefactorLensPlugin extends Plugin {
   }
 
   private getCM6View(view: MarkdownView): EditorView | null {
-    // @ts-ignore
-    if (view.editor && view.editor.cm) {
-      // @ts-ignore
-      return view.editor.cm as EditorView;
-    }
-    // @ts-ignore
-    if (view.editMode && view.editMode.editor && view.editMode.editor.cm) {
-      // @ts-ignore
-      return view.editMode.editor.cm as EditorView;
-    }
-    const cmElement = view.containerEl.querySelector(".cm-editor");
-    if (cmElement && (EditorView as any).findFromDOM) {
-      return (EditorView as any).findFromDOM(cmElement);
-    }
-    return null;
+    const cm = (view.editor as Editor & { cm?: EditorView }).cm;
+    if (cm) return cm;
+
+    const cmElement = view.containerEl.querySelector<HTMLElement>(".cm-editor");
+    return cmElement ? EditorView.findFromDOM(cmElement) : null;
   }
 
   private handleActiveLeafChange(leaf: WorkspaceLeaf | null) {
@@ -343,7 +321,7 @@ export default class RefactorLensPlugin extends Plugin {
       if (headerEl) {
         const pillView = new BaselinePillView(headerEl as HTMLElement, this.app, {
           onSelectBaseline: (baselineFile) => {
-            this.setBaselineForView(view, baselineFile);
+            void this.setBaselineForView(view, baselineFile);
           },
           getCurrentBaseline: () => {
             return this.activeBaselines.get(fileKey) || null;
@@ -352,27 +330,24 @@ export default class RefactorLensPlugin extends Plugin {
             return view.file;
           },
           onOpenScratchpad: () => {
-            this.activateScratchpadView();
+            void this.activateScratchpadView();
           },
           getScratchpadCount: async () => {
             const items = await this.scratchpadManager.getItems(view.file?.path);
             return items.length;
           },
           onOpenCopilot: () => {
-            this.openCopilotModal(view.editor, view);
+            void this.openCopilotModal(view.editor, view);
           },
           onOpenSettings: () => {
-            // @ts-ignore
-            this.app.setting.open();
-            // @ts-ignore
-            this.app.setting.openTabById("refactor-lens");
+            new Notice("请打开 Obsidian 设置 → 第三方插件 → Refactor Lens。");
           },
         });
         this.pillViews.set(fileKey, pillView);
 
         const existingBaseline = this.activeBaselines.get(fileKey);
         if (existingBaseline) {
-          this.refreshDiffForView(view);
+          void this.refreshDiffForView(view);
         }
       }
     }
@@ -384,7 +359,7 @@ export default class RefactorLensPlugin extends Plugin {
     const current = this.activeBaselines.get(fileKey);
 
     if (current) {
-      this.setBaselineForView(view, null);
+      void this.setBaselineForView(view, null);
       new Notice("修订透镜已关闭");
     } else {
       new Notice("请在顶部小药丸选择比对参照文档 (如 V1, V2)");

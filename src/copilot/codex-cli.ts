@@ -163,7 +163,9 @@ ${styleContext ? `【参考标杆风味】：\n${styleContext}` : ""}
       const cleanup = () => {
         try {
           fs.rmSync(tmpDir, { recursive: true, force: true });
-        } catch (_) {}
+        } catch {
+          // Cleanup is best effort; the operating system will eventually remove temporary files.
+        }
       };
 
       const finishWithError = (message: string) => {
@@ -179,7 +181,7 @@ ${styleContext ? `【参考标杆风味】：\n${styleContext}` : ""}
         stdio: ["pipe", "pipe", "pipe"],
       });
 
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         child.kill();
         finishWithError("Codex 执行超时");
       }, 30000);
@@ -191,17 +193,19 @@ ${styleContext ? `【参考标杆风味】：\n${styleContext}` : ""}
         if (stderr.length < maxOutputBytes) stderr += chunk.toString("utf-8");
       });
       child.on("error", () => {
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         finishWithError("无法启动 Codex CLI");
       });
       child.on("close", (code) => {
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         if (finished) return;
 
         let raw = "";
         try {
           if (fs.existsSync(tmpOut)) raw = fs.readFileSync(tmpOut, "utf-8").trim();
-        } catch (_) {}
+        } catch {
+          // A missing or unreadable output file is handled as an empty CLI response below.
+        }
 
         if (!raw && stdout) {
           const match = stdout.match(/codex\s*\n([\s\S]+?)(?=\ntokens used|$)/i);
@@ -237,11 +241,11 @@ ${styleContext ? `【参考标杆风味】：\n${styleContext}` : ""}
   public cleanOutput(text: string): string {
     let s = text.trim();
     // 1. 括号包裹型：如 【建议版本 1】、【建议 1】、[Option 1]、(建议版本 1)
-    s = s.replace(/^[【\[(（]\s*(?:建议|改写)?\s*(?:版本|选项|候选|Option)?\s*[一二三四五六七八九十0-9]*\s*[】\])）]?[:：\s]*/gi, "");
+    s = s.replace(/^(?:【|\[|\(|（)\s*(?:建议|改写)?\s*(?:版本|选项|候选|Option)?\s*[一二三四五六七八九十0-9]*\s*(?:】|\]|\)|）)?[:：\s]*/gi, "");
     // 2. 无括号但带关键词型：如 建议版本1：、版本一：、改写方案 1：
     s = s.replace(/^(?:建议|改写)?\s*(?:版本|选项|候选|方案)\s*[一二三四五六七八九十0-9]*[:：\s]*/gi, "");
     // 3. 数字序号型：如 1. 、1、 、(1) 、①
-    s = s.replace(/^(?:[0-9]+[\.、:：\s]+|[①②③④⑤⑥⑦⑧⑨⑩]|\([0-9]+\)\s*)/g, "");
+    s = s.replace(/^(?:[0-9]+[.、:：\s]+|[①②③④⑤⑥⑦⑧⑨⑩]|\([0-9]+\)\s*)/g, "");
     return s.trim();
   }
 

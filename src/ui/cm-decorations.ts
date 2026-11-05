@@ -29,8 +29,9 @@ class DeletedBlockCardWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const card = document.createElement("div");
-    card.className = `refactor-deleted-block-card ${this.isLive ? "refactor-live-deleted-card" : ""}`;
+    const card = createDiv({
+      cls: `refactor-deleted-block-card ${this.isLive ? "refactor-live-deleted-card" : ""}`,
+    });
 
     // 解析出独立的段落列表，支持按段精细收录与多段组合勾选
     const rawParagraphs = this.fullText
@@ -42,24 +43,21 @@ class DeletedBlockCardWidget extends WidgetType {
     const selectedIndices = new Set<number>();
 
     // 顶部极简工具条
-    const header = document.createElement("div");
-    header.className = "refactor-deleted-card-header";
+    const header = card.createDiv({ cls: "refactor-deleted-card-header" });
 
-    const titleSpan = document.createElement("span");
-    titleSpan.className = "refactor-deleted-card-title";
+    const titleSpan = header.createSpan({ cls: "refactor-deleted-card-title" });
     const countDesc = paragraphs.length > 1 ? ` (共 ${paragraphs.length} 个段落)` : "";
     titleSpan.innerText = this.isLive
       ? `✂️ 本次现场编辑删除的段落${countDesc}`
       : `🗑 底稿中存在，当前版本已删除的段落${countDesc}`;
 
-    const actions = document.createElement("div");
-    actions.className = "refactor-deleted-card-actions";
+    const actions = header.createDiv({ cls: "refactor-deleted-card-actions" });
 
     // 批量选中暂存按钮
-    const batchSaveBtn = document.createElement("button");
-    batchSaveBtn.className = "refactor-deleted-action-btn refactor-btn-batch-save";
+    const batchSaveBtn = actions.createEl("button", {
+      cls: "refactor-deleted-action-btn refactor-btn-batch-save refactor-is-hidden",
+    });
     batchSaveBtn.type = "button";
-    batchSaveBtn.style.display = "none";
     batchSaveBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -73,11 +71,11 @@ class DeletedBlockCardWidget extends WidgetType {
     });
 
     // 取消多选按钮
-    const clearSelectionBtn = document.createElement("button");
-    clearSelectionBtn.className = "refactor-deleted-action-btn refactor-btn-ghost-sm";
+    const clearSelectionBtn = actions.createEl("button", {
+      cls: "refactor-deleted-action-btn refactor-btn-ghost-sm refactor-is-hidden",
+      text: "取消勾选",
+    });
     clearSelectionBtn.type = "button";
-    clearSelectionBtn.innerText = "取消勾选";
-    clearSelectionBtn.style.display = "none";
     clearSelectionBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -87,10 +85,11 @@ class DeletedBlockCardWidget extends WidgetType {
       updateBatchUI();
     });
 
-    const saveAllBtn = document.createElement("button");
-    saveAllBtn.className = "refactor-deleted-action-btn";
+    const saveAllBtn = actions.createEl("button", {
+      cls: "refactor-deleted-action-btn",
+      text: paragraphs.length > 1 ? "📦 暂存全部段落" : "📦 暂存至灵感抽屉",
+    });
     saveAllBtn.type = "button";
-    saveAllBtn.innerHTML = paragraphs.length > 1 ? `📦 暂存全部段落` : `📦 暂存至灵感抽屉`;
     saveAllBtn.title = "将这段已删除的内容完整存入灵感抽屉";
     saveAllBtn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -100,52 +99,33 @@ class DeletedBlockCardWidget extends WidgetType {
       }
     });
 
-    const copyBtn = document.createElement("button");
-    copyBtn.className = "refactor-deleted-action-btn refactor-btn-ghost-sm";
-    copyBtn.type = "button";
-    copyBtn.innerHTML = `📋 复制全文`;
-    copyBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      navigator.clipboard.writeText(this.fullText.trim());
-    });
-
-    actions.appendChild(batchSaveBtn);
-    actions.appendChild(clearSelectionBtn);
-    actions.appendChild(saveAllBtn);
-    actions.appendChild(copyBtn);
-    header.appendChild(titleSpan);
-    header.appendChild(actions);
-
     const updateBatchUI = () => {
       if (selectedIndices.size > 0) {
-        batchSaveBtn.style.display = "inline-flex";
-        batchSaveBtn.innerHTML = `📦 暂存选中的 ${selectedIndices.size} 个段落`;
-        clearSelectionBtn.style.display = "inline-flex";
-        saveAllBtn.style.display = "none";
+        batchSaveBtn.removeClass("refactor-is-hidden");
+        batchSaveBtn.setText(`📦 暂存选中的 ${selectedIndices.size} 个段落`);
+        clearSelectionBtn.removeClass("refactor-is-hidden");
+        saveAllBtn.addClass("refactor-is-hidden");
       } else {
-        batchSaveBtn.style.display = "none";
-        clearSelectionBtn.style.display = "none";
-        saveAllBtn.style.display = "inline-flex";
+        batchSaveBtn.addClass("refactor-is-hidden");
+        clearSelectionBtn.addClass("refactor-is-hidden");
+        saveAllBtn.removeClass("refactor-is-hidden");
       }
     };
 
     // 正文内容区：按段落拆分渲染，每段具备独立 hover 工具条与勾选框
-    const body = document.createElement("div");
-    body.className = "refactor-deleted-card-body";
+    const body = card.createDiv({ cls: "refactor-deleted-card-body" });
 
     paragraphs.forEach((para, idx) => {
       const isDivider = /^[-*_]{3,}$/.test(para);
-      const paraEl = document.createElement("div");
-      paraEl.className = `refactor-deleted-para ${isDivider ? "refactor-deleted-divider" : ""}`;
+      const paraEl = body.createDiv({
+        cls: `refactor-deleted-para ${isDivider ? "refactor-deleted-divider" : ""}`,
+      });
 
       if (!isDivider && paragraphs.length > 1) {
         // 多选框
-        const checkWrap = document.createElement("label");
-        checkWrap.className = "refactor-para-check-label";
-        const chk = document.createElement("input");
+        const checkWrap = paraEl.createEl("label", { cls: "refactor-para-check-label" });
+        const chk = checkWrap.createEl("input", { cls: "refactor-para-checkbox" });
         chk.type = "checkbox";
-        chk.className = "refactor-para-checkbox";
         chk.title = "勾选此段（可多选组合暂存）";
         chk.addEventListener("change", (e) => {
           e.stopPropagation();
@@ -158,25 +138,20 @@ class DeletedBlockCardWidget extends WidgetType {
           }
           updateBatchUI();
         });
-        checkWrap.appendChild(chk);
-        paraEl.appendChild(checkWrap);
       }
 
       // 段落文本内容
-      const textEl = document.createElement("div");
-      textEl.className = "refactor-para-text";
-      textEl.innerText = para;
-      paraEl.appendChild(textEl);
+      paraEl.createDiv({ cls: "refactor-para-text", text: para });
 
       // 单段 hover 快捷工具条
       if (!isDivider) {
-        const hoverActions = document.createElement("div");
-        hoverActions.className = "refactor-para-hover-actions";
+        const hoverActions = paraEl.createDiv({ cls: "refactor-para-hover-actions" });
 
-        const saveParaBtn = document.createElement("button");
-        saveParaBtn.className = "refactor-para-btn";
+        const saveParaBtn = hoverActions.createEl("button", {
+          cls: "refactor-para-btn",
+          text: "📦 存此段",
+        });
         saveParaBtn.type = "button";
-        saveParaBtn.innerHTML = `📦 存此段`;
         saveParaBtn.title = "仅将本段内容存入灵感抽屉";
         saveParaBtn.addEventListener("click", (e) => {
           e.preventDefault();
@@ -186,19 +161,6 @@ class DeletedBlockCardWidget extends WidgetType {
           }
         });
 
-        const copyParaBtn = document.createElement("button");
-        copyParaBtn.className = "refactor-para-btn refactor-para-btn-ghost";
-        copyParaBtn.type = "button";
-        copyParaBtn.innerHTML = `📋 复制`;
-        copyParaBtn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          navigator.clipboard.writeText(para);
-        });
-
-        hoverActions.appendChild(saveParaBtn);
-        hoverActions.appendChild(copyParaBtn);
-        paraEl.appendChild(hoverActions);
       }
 
       paraEl.addEventListener("contextmenu", (e) => {
@@ -209,11 +171,7 @@ class DeletedBlockCardWidget extends WidgetType {
         showDeletedContextMenu(e.clientX, e.clientY, text);
       });
 
-      body.appendChild(paraEl);
     });
-
-    card.appendChild(header);
-    card.appendChild(body);
 
     return card;
   }
@@ -241,9 +199,10 @@ class DeletedInlineWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const span = document.createElement("span");
-    span.className = `refactor-diff-deleted ${this.isLive ? "refactor-live-deleted" : ""}`;
-    span.innerText = this.deletedText;
+    const span = createSpan({
+      cls: `refactor-diff-deleted ${this.isLive ? "refactor-live-deleted" : ""}`,
+      text: this.deletedText,
+    });
     span.title = "【已删除文字】右键可存入灵感抽屉";
 
     span.addEventListener("contextmenu", (e) => {
@@ -275,31 +234,19 @@ function showDeletedContextMenu(x: number, y: number, fullText: string) {
   const oldMenu = document.querySelector(".refactor-context-menu");
   if (oldMenu) oldMenu.remove();
 
-  const menu = document.createElement("div");
-  menu.className = "refactor-context-menu";
-  menu.style.top = `${y}px`;
-  menu.style.left = `${x}px`;
-
-  menu.innerHTML = `
-    <div class="refactor-menu-item" id="menu-save-scratchpad">
-      <span class="refactor-menu-icon">📦</span>
-      <span class="refactor-menu-text">${isPartial ? "暂存所选句子至灵感抽屉" : "暂存整段至灵感抽屉"}</span>
-    </div>
-    <div class="refactor-menu-item" id="menu-copy-text">
-      <span class="refactor-menu-icon">📋</span>
-      <span class="refactor-menu-text">复制文字</span>
-    </div>
-  `;
+  const menu = createDiv({ cls: "refactor-context-menu" });
+  menu.setCssStyles({ top: `${y}px`, left: `${x}px` });
+  const saveItem = menu.createDiv({ cls: "refactor-menu-item" });
+  saveItem.createSpan({ cls: "refactor-menu-icon", text: "📦" });
+  saveItem.createSpan({
+    cls: "refactor-menu-text",
+    text: isPartial ? "暂存所选句子至灵感抽屉" : "暂存整段至灵感抽屉",
+  });
 
   document.body.appendChild(menu);
 
-  menu.querySelector("#menu-save-scratchpad")?.addEventListener("click", () => {
+  saveItem.addEventListener("click", () => {
     if (globalSaveCallback && textToSave) globalSaveCallback(textToSave);
-    menu.remove();
-  });
-
-  menu.querySelector("#menu-copy-text")?.addEventListener("click", () => {
-    navigator.clipboard.writeText(textToSave);
     menu.remove();
   });
 
@@ -309,7 +256,7 @@ function showDeletedContextMenu(x: number, y: number, fullText: string) {
       document.removeEventListener("pointerdown", closeListener);
     }
   };
-  setTimeout(() => document.addEventListener("pointerdown", closeListener), 20);
+  window.setTimeout(() => document.addEventListener("pointerdown", closeListener), 20);
 }
 
 /**
@@ -325,52 +272,38 @@ class MovedTargetWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const container = document.createElement("div");
-    container.className = "refactor-moved-badge-container";
-    container.style.userSelect = "none";
-    // @ts-ignore
-    container.style.webkitUserSelect = "none";
+    const container = createDiv({ cls: "refactor-moved-badge-container" });
 
-    const badge = document.createElement("span");
-    badge.className = "refactor-moved-badge";
+    const badge = container.createSpan({ cls: "refactor-moved-badge" });
     const simPercent = Math.round(this.pair.similarity * 100);
-    badge.innerHTML = `📦 搬迁段落 · 来自原第 ${this.pair.originalSectionIndex} 节 (${simPercent}% 相似) <span class="refactor-toggle-arrow">▾</span>`;
+    badge.appendText(`📦 搬迁段落 · 来自原第 ${this.pair.originalSectionIndex} 节 (${simPercent}% 相似) `);
+    const arrow = badge.createSpan({ cls: "refactor-toggle-arrow", text: "▾" });
     badge.title = "点击原地展开/收起底稿原文对照";
 
-    const drawer = document.createElement("div");
-    drawer.className = "refactor-moved-drawer";
-    drawer.style.display = "none";
-    drawer.innerHTML = `
-      <div class="refactor-drawer-header">
-        <span class="refactor-drawer-title">【底稿原第 ${this.pair.originalSectionIndex} 节 原文对照】</span>
-        <span class="refactor-drawer-close">收起 ▴</span>
-      </div>
-      <div class="refactor-drawer-body">${escapeHtml(this.pair.originalText)}</div>
-    `;
+    const drawer = container.createDiv({ cls: "refactor-moved-drawer refactor-is-hidden" });
+    const drawerHeader = drawer.createDiv({ cls: "refactor-drawer-header" });
+    drawerHeader.createSpan({
+      cls: "refactor-drawer-title",
+      text: `【底稿原第 ${this.pair.originalSectionIndex} 节 原文对照】`,
+    });
+    const closeBtn = drawerHeader.createSpan({ cls: "refactor-drawer-close", text: "收起 ▴" });
+    drawer.createDiv({ cls: "refactor-drawer-body", text: this.pair.originalText });
 
     badge.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       this.isExpanded = !this.isExpanded;
-      drawer.style.display = this.isExpanded ? "block" : "none";
-      const arrow = badge.querySelector(".refactor-toggle-arrow");
-      if (arrow) arrow.textContent = this.isExpanded ? "▴" : "▾";
+      drawer.toggleClass("refactor-is-hidden", !this.isExpanded);
+      arrow.setText(this.isExpanded ? "▴" : "▾");
     });
 
-    const closeBtn = drawer.querySelector(".refactor-drawer-close");
-    if (closeBtn) {
-      closeBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.isExpanded = false;
-        drawer.style.display = "none";
-        const arrow = badge.querySelector(".refactor-toggle-arrow");
-        if (arrow) arrow.textContent = "▾";
-      });
-    }
-
-    container.appendChild(badge);
-    container.appendChild(drawer);
+    closeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.isExpanded = false;
+      drawer.addClass("refactor-is-hidden");
+      arrow.setText("▾");
+    });
     return container;
   }
 
@@ -381,10 +314,6 @@ class MovedTargetWidget extends WidgetType {
   ignoreEvent(): boolean {
     return false;
   }
-}
-
-function escapeHtml(text: string) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 export interface RefactorDiffPayload {
