@@ -1,0 +1,1337 @@
+/* RefactorLens (文案透镜) - Word 风格纯净修订模式样式表 */
+
+/* 顶部常驻版本透镜小药丸 (Baseline Pill) */
+.refactor-lens-pill {
+  position: absolute;
+  top: 9px;
+  right: 90px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.refactor-lens-pill:hover {
+  background-color: var(--background-secondary-alt);
+  border-color: var(--interactive-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.refactor-lens-pill.active {
+  border-color: var(--interactive-accent);
+  background-color: var(--background-primary-alt);
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+
+.refactor-lens-pill-icon {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+.refactor-lens-pill-arrow {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
+.refactor-lens-pill-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background-color: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+/* ================= 修订标记核心视觉 ================= */
+
+/* 1. 历史底稿删除文字 (Deleted Text): 浅红底色 + 红色中划线 + 严禁鼠标选中 */
+.refactor-diff-deleted {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  color: #b91c1c !important;
+  text-decoration: line-through !important;
+  text-decoration-color: #ef4444 !important;
+  text-decoration-thickness: 1.5px !important;
+  border-radius: 3px;
+  padding: 0 3px;
+  margin: 0 1px;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}
+
+.theme-dark .refactor-diff-deleted {
+  background-color: rgba(239, 68, 68, 0.22) !important;
+  color: #fca5a5 !important;
+  text-decoration-color: #f87171 !important;
+}
+
+/* 1.1 现场编辑刚删掉的字 (Live Deletions - 按 Backspace 删字留痕) */
+.refactor-live-deleted {
+  background-color: rgba(244, 63, 94, 0.18) !important;
+  color: #e11d48 !important;
+  text-decoration: line-through double !important;
+  text-decoration-color: #f43f5e !important;
+  border-bottom: 1px dashed rgba(244, 63, 94, 0.5) !important;
+}
+
+.theme-dark .refactor-live-deleted {
+  background-color: rgba(244, 63, 94, 0.28) !important;
+  color: #fda4af !important;
+  text-decoration-color: #fb7185 !important;
+}
+
+/* 2. 新增文字 (Added Text): Word 纯净柔和淡绿微底，彻底抛弃刺眼下划线与所有小竖线！
+   平整舒适，如同柔和荧光笔微扫，保证连续长文的最佳阅读体验
+*/
+.refactor-diff-added {
+  color: #065f46 !important;
+  background-color: rgba(16, 185, 129, 0.13) !important;
+  text-decoration: none !important;
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+
+.theme-dark .refactor-diff-added {
+  color: #6ee7b7 !important;
+  background-color: rgba(16, 185, 129, 0.22) !important;
+}
+
+/* 2.1 现场键盘刚敲入的字 (Live Additions - 区分于历史版本演进) */
+.refactor-live-added {
+  color: #0284c7 !important;
+  background-color: rgba(14, 165, 233, 0.16) !important;
+  font-weight: 500 !important;
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+
+.theme-dark .refactor-live-added {
+  color: #38bdf8 !important;
+  background-color: rgba(14, 165, 233, 0.26) !important;
+}
+
+/* 3. 段落搬家：新位置段首独立徽标与可折叠抽屉 */
+.refactor-moved-badge-container {
+  display: block;
+  margin: 8px 0 4px 0;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.refactor-moved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refactor-moved-badge:hover {
+  background-color: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.5);
+  transform: translateY(-0.5px);
+}
+
+.theme-dark .refactor-moved-badge {
+  background-color: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.theme-dark .refactor-moved-badge:hover {
+  background-color: rgba(245, 158, 11, 0.28);
+}
+
+.refactor-toggle-arrow {
+  font-size: 10px;
+  margin-left: 2px;
+  color: #b45309;
+}
+
+.theme-dark .refactor-toggle-arrow {
+  color: #fde68a;
+}
+
+/* 段落搬家：原文对照折叠抽屉 (原地展开，不跳出、不对错号) */
+.refactor-moved-drawer {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background-color: rgba(245, 158, 11, 0.06);
+  border: 1px dashed rgba(245, 158, 11, 0.35);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-normal);
+  line-height: 1.6;
+}
+
+.theme-dark .refactor-moved-drawer {
+  background-color: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.refactor-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.theme-dark .refactor-drawer-header {
+  color: #fcd34d;
+}
+
+.refactor-drawer-close {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.refactor-drawer-close:hover {
+  color: var(--text-normal);
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.refactor-drawer-body {
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+
+/* ================= Phase 2: 灵感暂存抽屉样式 ================= */
+
+.refactor-scratchpad-view-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.refactor-scratchpad-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 10px;
+}
+
+.refactor-scratchpad-title-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.refactor-scratchpad-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.refactor-scratchpad-badge {
+  font-size: 11px;
+  background-color: var(--background-secondary-alt);
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.refactor-scratchpad-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.refactor-btn-sm {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.refactor-btn-sm:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.refactor-btn-danger {
+  color: var(--text-error);
+}
+
+.refactor-btn-danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.refactor-scratchpad-search-box {
+  margin-bottom: 12px;
+}
+
+.refactor-scratchpad-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.refactor-scratchpad-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+}
+
+.refactor-scratchpad-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.refactor-scratchpad-empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+
+.refactor-scratchpad-empty-text {
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.refactor-scratchpad-card {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
+}
+
+.refactor-scratchpad-card:hover {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.refactor-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.refactor-card-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.refactor-card-body {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  padding: 4px 6px;
+  background-color: var(--background-primary);
+  border-radius: 4px;
+}
+
+.refactor-card-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.refactor-card-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-primary);
+  cursor: pointer;
+  color: var(--text-normal);
+  transition: all 0.15s ease;
+}
+
+.refactor-btn-primary {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.refactor-btn-primary:hover {
+  opacity: 0.9;
+}
+
+/* ================= Phase 3: Codex 改写顾问弹窗样式 ================= */
+
+.refactor-copilot-modal-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px;
+}
+
+.refactor-copilot-quote-box {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--interactive-accent);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.refactor-copilot-quote-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.refactor-copilot-quote-text {
+  color: var(--text-normal);
+  font-style: italic;
+}
+
+.refactor-copilot-input-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.refactor-copilot-input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  font-size: 13px;
+}
+
+.refactor-copilot-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+.refactor-copilot-submit-btn {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  padding: 0 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.refactor-copilot-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.refactor-copilot-pill-btn {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 14px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refactor-copilot-pill-btn:hover {
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+  background-color: var(--background-primary-alt);
+}
+
+.refactor-copilot-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-height: 18px;
+}
+
+.refactor-copilot-loading {
+  color: var(--interactive-accent);
+  animation: refactor-pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes refactor-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.refactor-copilot-result-box {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.refactor-result-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.refactor-result-version-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.refactor-copilot-diff-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  background-color: var(--background-primary);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}
+
+.refactor-preview-old {
+  opacity: 0.8;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}
+
+.refactor-preview-new {
+  font-weight: 500;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}
+
+.refactor-preview-new span,
+.refactor-preview-old span {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}
+
+.refactor-preview-new ::selection,
+.refactor-preview-new span::selection,
+.refactor-copilot-diff-preview ::selection {
+  background-color: rgba(16, 185, 129, 0.35) !important;
+  color: inherit !important;
+}
+
+/* 快捷分句胶囊栏 */
+.refactor-clause-chips-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background-color: rgba(16, 185, 129, 0.06);
+  border: 1px dashed rgba(16, 185, 129, 0.35);
+  border-radius: 6px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.refactor-chips-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.refactor-clause-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #065f46;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.refactor-clause-chip:hover {
+  background-color: rgba(16, 185, 129, 0.28);
+  border-color: #10b981;
+  transform: translateY(-0.5px);
+}
+
+.theme-dark .refactor-clause-chip {
+  color: #6ee7b7;
+  background-color: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.refactor-copilot-action-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.refactor-btn-accept {
+  background-color: #059669;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refactor-btn-accept:hover {
+  background-color: #047857;
+}
+
+.refactor-btn-secondary {
+  background-color: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.refactor-btn-secondary:hover {
+  border-color: var(--interactive-accent);
+}
+
+.refactor-btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.refactor-btn-ghost:hover {
+  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+}
+
+/* 仅采纳半句：引导与智能拼接卡片 */
+.refactor-copilot-selection-guide {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 6px 10px;
+  background-color: rgba(99, 102, 241, 0.05);
+  border-radius: 6px;
+  border: 1px dashed rgba(99, 102, 241, 0.35);
+}
+
+.refactor-partial-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: rgba(99, 102, 241, 0.07);
+  border: 1.5px solid var(--interactive-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  animation: refactor-popover-in 0.15s ease-out;
+}
+
+.theme-dark .refactor-partial-preview-card {
+  background-color: rgba(99, 102, 241, 0.14);
+  border-color: #818cf8;
+}
+
+.refactor-partial-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.refactor-partial-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--interactive-accent);
+}
+
+.refactor-partial-badge {
+  font-size: 10px;
+  font-weight: 500;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.refactor-partial-body {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-normal);
+  padding: 8px 10px;
+  background-color: var(--background-primary);
+  border-radius: 6px;
+  border: 1px dashed var(--interactive-accent);
+  outline: none;
+  cursor: text;
+  word-break: break-word;
+}
+
+.refactor-partial-body:focus {
+  border-style: solid;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.refactor-partial-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.refactor-btn-partial-confirm {
+  background-color: var(--interactive-accent) !important;
+  color: var(--text-on-accent) !important;
+  font-weight: 600;
+}
+
+
+/* ================= 升级版交互：工具栏组、选区气泡与悬浮球 ================= */
+
+/* 顶部综合工具栏胶囊容器 */
+.refactor-lens-toolbar-wrapper {
+  position: absolute;
+  top: 10px;
+  right: 28px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.refactor-lens-toolbar-wrapper .refactor-lens-pill {
+  position: static;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.refactor-scratchpad-pill:hover {
+  border-color: #d97706;
+  color: #b45309;
+}
+
+.refactor-copilot-pill:hover {
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+}
+
+/* 红色删除文字右侧悬停暂存小按钮 */
+.refactor-deleted-save-btn {
+  display: inline-block;
+  opacity: 0;
+  margin-left: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  user-select: none;
+}
+
+.refactor-diff-deleted:hover .refactor-deleted-save-btn {
+  opacity: 0.9;
+}
+
+.refactor-deleted-save-btn:hover {
+  transform: scale(1.2);
+}
+
+/* 通用上下文菜单 */
+.refactor-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  padding: 6px;
+  min-width: 180px;
+  font-size: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.refactor-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 4px;
+}
+
+.refactor-menu-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-normal);
+}
+
+.refactor-menu-status {
+  font-size: 10px;
+}
+
+.refactor-menu-status.ready {
+  color: #10b981;
+}
+
+.refactor-menu-status.warning {
+  color: #f59e0b;
+}
+
+.refactor-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-normal);
+  transition: background-color 0.1s ease;
+}
+
+.refactor-menu-item:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--interactive-accent);
+}
+
+.refactor-menu-icon {
+  font-size: 13px;
+}
+
+/* 选区正上方跟随迷你胶囊 */
+.refactor-selection-popover {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 20px;
+  padding: 3px 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  user-select: none;
+  -webkit-user-select: none;
+  animation: refactor-popover-in 0.15s ease-out;
+}
+
+/* 当有任何弹窗打开时，绝对强制隐藏选区气泡，杜绝任何图层重叠遮挡 */
+body:has(.refactor-copilot-modal-root) .refactor-selection-popover,
+body:has(.modal-container) .refactor-selection-popover,
+.modal-container ~ .refactor-selection-popover {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+@keyframes refactor-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.refactor-popover-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-normal);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refactor-popover-btn:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--interactive-accent);
+}
+
+.refactor-popover-divider {
+  width: 1px;
+  height: 12px;
+  background-color: var(--background-modifier-border);
+  margin: 0 4px;
+}
+
+/* 右下角微型悬浮球 (Floating Copilot Ball) */
+.refactor-floating-ball {
+  position: fixed;
+  bottom: 25px;
+  right: 25px;
+  z-index: 900;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.refactor-floating-ball:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+}
+
+.refactor-ball-icon {
+  font-size: 16px;
+}
+
+.refactor-ball-tooltip {
+  display: none;
+}
+
+
+/* 灵感抽屉当前物理路径提示 */
+.refactor-scratchpad-path-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  background-color: var(--background-secondary-alt);
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 设置中心参考手册卡片 */
+.refactor-settings-guide-card {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 8px;
+}
+
+.refactor-settings-doc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-normal);
+}
+
+.refactor-doc-section {
+  margin-bottom: 14px;
+}
+
+.refactor-doc-section:last-child {
+  margin-bottom: 0;
+}
+
+.refactor-doc-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-accent);
+  margin-bottom: 6px;
+}
+
+.refactor-doc-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+
+.refactor-doc-list li {
+  margin-bottom: 4px;
+}
+
+.refactor-doc-list li b {
+  color: var(--text-normal);
+}
+
+.refactor-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+}
+
+.refactor-doc-table th,
+.refactor-doc-table td {
+  padding: 6px 10px;
+  border: 1px solid var(--background-modifier-border);
+  text-align: left;
+}
+
+.refactor-doc-table th {
+  background-color: var(--background-primary);
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.refactor-doc-table td {
+  color: var(--text-muted);
+}
+
+.refactor-doc-table code {
+  color: var(--text-accent);
+  font-size: 11px;
+  padding: 1px 4px;
+  background-color: var(--background-primary);
+  border-radius: 3px;
+}
+
+.refactor-doc-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+
+/* 每一行删除文字末尾的独立暂存胶囊 */
+.refactor-line-save-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  cursor: pointer;
+  vertical-align: middle;
+  text-decoration: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  transition: all 0.15s ease;
+}
+
+.refactor-line-save-badge:hover {
+  background-color: rgba(245, 158, 11, 0.28);
+  border-color: rgba(245, 158, 11, 0.6);
+  transform: scale(1.05);
+}
+
+.theme-dark .refactor-line-save-badge {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+
+/* 改写弹窗底部的温馨提示框 */
+.refactor-copilot-hint-box {
+  font-size: 11px;
+  color: var(--text-muted);
+  background-color: var(--background-primary);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+
+/* ================= 宏观大段删除独立卡片 (彻底解决文字挤堆排版) ================= */
+
+.refactor-deleted-block-card {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+  padding: 10px 14px;
+  background-color: rgba(239, 68, 68, 0.04);
+  border: 1px dashed rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  box-sizing: border-box;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.theme-dark .refactor-deleted-block-card {
+  background-color: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.refactor-live-deleted-card {
+  background-color: rgba(244, 63, 94, 0.06);
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+.refactor-deleted-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px dashed rgba(239, 68, 68, 0.2);
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.refactor-deleted-card-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b91c1c;
+  opacity: 0.85;
+}
+
+.theme-dark .refactor-deleted-card-title {
+  color: #fca5a5;
+}
+
+.refactor-deleted-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.refactor-deleted-action-btn {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refactor-deleted-action-btn:hover {
+  background-color: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  transform: translateY(-0.5px);
+}
+
+.theme-dark .refactor-deleted-action-btn {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.refactor-btn-ghost-sm {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--background-modifier-border);
+}
+
+.refactor-btn-ghost-sm:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.refactor-deleted-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #b91c1c;
+  word-break: break-word;
+}
+
+.refactor-deleted-para {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.refactor-deleted-para:hover {
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+.refactor-deleted-para.refactor-para-selected {
+  background-color: rgba(239, 68, 68, 0.09);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.theme-dark .refactor-deleted-para:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.theme-dark .refactor-deleted-para.refactor-para-selected {
+  background-color: rgba(239, 68, 68, 0.16);
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.refactor-para-check-label {
+  display: flex;
+  align-items: center;
+  padding-top: 3px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.refactor-para-checkbox {
+  cursor: pointer;
+  opacity: 0.3;
+  transition: opacity 0.15s ease;
+  accent-color: #ef4444;
+}
+
+.refactor-deleted-para:hover .refactor-para-checkbox,
+.refactor-para-checkbox:checked {
+  opacity: 1;
+}
+
+.refactor-para-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #b91c1c;
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.6);
+  text-decoration-thickness: 1.5px;
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  opacity: 0.85;
+}
+
+.theme-dark .refactor-para-text {
+  color: #fca5a5;
+  text-decoration-color: rgba(248, 113, 113, 0.6);
+}
+
+.refactor-deleted-divider {
+  opacity: 0.4;
+  padding: 2px 10px;
+}
+
+.refactor-para-hover-actions {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  background-color: var(--background-primary);
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.refactor-deleted-para:hover .refactor-para-hover-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.refactor-para-btn {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.refactor-para-btn:hover {
+  background-color: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+}
+
+.theme-dark .refactor-para-btn {
+  color: #fca5a5;
+  background-color: rgba(239, 68, 68, 0.2);
+}
+
+.refactor-para-btn-ghost {
+  background: transparent;
+  border-color: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.refactor-para-btn-ghost:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.refactor-btn-batch-save {
+  background-color: var(--interactive-accent) !important;
+  color: var(--text-on-accent) !important;
+  border-color: var(--interactive-accent) !important;
+  font-weight: 600;
+}
