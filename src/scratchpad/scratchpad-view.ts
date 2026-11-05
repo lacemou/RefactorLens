@@ -10,6 +10,7 @@ export class ScratchpadView extends ItemView {
   private pathHintEl: HTMLElement;
   private searchInput: HTMLInputElement;
   private currentFilter: string = "";
+  private renderRevision: number = 0;
 
   private unsubscribeUpdate: (() => void) | null = null;
 
@@ -109,14 +110,15 @@ export class ScratchpadView extends ItemView {
   }
 
   private async renderItems() {
-    this.itemsContainer.empty();
+    const revision = ++this.renderRevision;
     const recentView = this.getRecentMarkdownView();
     const curPath = recentView?.file?.path;
     const resolvedFilePath = this.manager.resolveFilePath(curPath);
-
-    this.pathHintEl.setText(`📁 存储于: ${resolvedFilePath}`);
-
     const items = await this.manager.getItems(curPath);
+    if (revision !== this.renderRevision) return;
+
+    this.itemsContainer.empty();
+    this.pathHintEl.setText(`📁 存储于: ${resolvedFilePath}`);
 
     // 过滤
     const filtered = items.filter((item) => {

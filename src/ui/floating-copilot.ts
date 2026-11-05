@@ -19,6 +19,7 @@ export class FloatingCopilotManager {
   private floatingBallEl: HTMLElement | null = null;
   private activeView: MarkdownView | null = null;
   private isModalActive: boolean = false;
+  private selectionListener: ((event: PointerEvent) => void) | null = null;
 
   constructor(app: App, handlers: FloatingCopilotHandlers) {
     this.app = app;
@@ -76,7 +77,7 @@ export class FloatingCopilotManager {
   }
 
   private registerSelectionListener() {
-    document.addEventListener("pointerup", (e) => {
+    this.selectionListener = (e: PointerEvent) => {
       window.setTimeout(() => {
         // 如果当前有模态弹窗正在显示，绝对禁止浮现选区气泡！
         if (
@@ -119,7 +120,8 @@ export class FloatingCopilotManager {
           this.hideSelectionPopover();
         }
       }, 70);
-    });
+    };
+    document.addEventListener("pointerup", this.selectionListener);
   }
 
   private showSelectionPopover(
@@ -272,6 +274,10 @@ export class FloatingCopilotManager {
 
   public destroy() {
     this.hideSelectionPopover();
+    if (this.selectionListener) {
+      document.removeEventListener("pointerup", this.selectionListener);
+      this.selectionListener = null;
+    }
     if (this.floatingBallEl) {
       this.floatingBallEl.remove();
       this.floatingBallEl = null;

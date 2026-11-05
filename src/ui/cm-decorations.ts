@@ -3,12 +3,13 @@ import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/v
 import { DocumentDiffResult } from "../diff/comparator";
 import { MovedPair } from "../diff/moved-detector";
 import {
+  DeletedTextUnit,
   isScratchpadCandidate,
   isTinyDeletedFragment,
   splitDeletedTextUnits,
 } from "./deleted-text-policy";
 
-type SaveTextCallback = (text: string) => void;
+type SaveTextCallback = (text: string) => Promise<void> | void;
 let globalSaveCallback: SaveTextCallback | null = null;
 
 export function registerDeletedTextSaveHandler(handler: SaveTextCallback) {
@@ -18,14 +19,14 @@ export function registerDeletedTextSaveHandler(handler: SaveTextCallback) {
 /**
  * 轻量行内删除痕迹。长段落也不再提升成块级卡片，以免打断正文。
  */
-class DeletedInlineWidget extends WidgetType {
-  private deletedText: string;
+class DeletedUnitWidget extends WidgetType {
+  private unit: DeletedTextUnit;
   private isLive: boolean;
   private fallbackPosition: number;
 
-  constructor(deletedText: string, fallbackPosition: number, isLive: boolean = false) {
+  constructor(unit: DeletedTextUnit, fallbackPosition: number, isLive: boolean = false) {
     super();
-    this.deletedText = deletedText;
+    this.unit = unit;
     this.fallbackPosition = fallbackPosition;
     this.isLive = isLive;
   }
@@ -34,7 +35,7 @@ class DeletedInlineWidget extends WidgetType {
     const wrapper = createSpan({ cls: "refactor-deleted-widget" });
     let restoring = false;
 
-    const restoreText = (rawText: string) => {
+    const restoreText = () => {
       if (restoring) return;
       restoring = true;
       wrapper.addClass("refactor-deleted-widget-restoring");
@@ -50,73 +51,80 @@ class DeletedInlineWidget extends WidgetType {
       }
       insertPosition = Math.min(view.state.doc.length, Math.max(0, insertPosition));
       view.dispatch({
-        changes: { from: insertPosition, insert: rawText },
-        selection: { anchor: insertPosition + rawText.length },
+        changes: { from: insertPosition, insert: this.unit.rawText },
+        selection: { anchor: insertPosition + this.unit.rawText.length },
         scrollIntoView: true,
       });
       view.focus();
     };
 
-    for (const unit of splitDeletedTextUnits(this.deletedText)) {
-      const leadingWhitespace = unit.rawText.match(/^\s*/u)?.[0] || "";
-      const contentEnd = unit.rawText.length - (unit.rawText.match(/\s*$/u)?.[0].length || 0);
-      const trailingWhitespace = unit.rawText.slice(contentEnd);
+    const leadingWhitespace = this.unit.rawText.match(/^\s*/u)?.[0] || "";
+    const contentEnd = this.unit.rawText.length - (this.unit.rawText.match(/\s*$/u)?.[0].length || 0);
+    const trailingWhitespace = this.unit.rawText.slice(contentEnd);
 
-      if (leadingWhitespace) wrapper.appendText(leadingWhitespace);
-      const unitEl = wrapper.createSpan({ cls: "refactor-deleted-unit" });
+    if (leadingWhitespace) wrapper.appendText(leadingWhitespace);
+    const unitEl = wrapper.createSpan({ cls: "refactor-deleted-unit" });
 
-      const deletedTextEl = unitEl.createSpan({
-        cls: `refactor-diff-deleted ${this.isLive ? "refactor-live-deleted" : ""}`,
-        text: unit.displayText,
+    const deletedTextEl = unitEl.createSpan({
+      cls: `refactor-diff-deleted ${this.isLive ? "refactor-live-deleted" : ""}`,
+      text: this.unit.displayText,
+    });
+    deletedTextEl.title = this.isLive ? "本次编辑中删除的内容" : "相对底稿已删除的内容";
+
+    if (isTinyDeletedFragment(this.unit.displayText)) {
+      unitEl.addClass("refactor-deleted-tiny");
+      deletedTextEl.title += "；右键恢复";
+      deletedTextEl.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        restoreText();
       });
-      deletedTextEl.title = this.isLive ? "本次编辑中删除的内容" : "相对底稿已删除的内容";
+    } else {
+      const actions = unitEl.createSpan({ cls: "refactor-deleted-inline-actions" });
+      const restoreButton = actions.createEl("button", {
+        cls: "refactor-deleted-inline-btn refactor-deleted-restore-btn",
+        text: "↩ 恢复",
+        type: "button",
+      });
+      restoreButton.title = "只将这句删除内容恢复到原位置";
+      restoreButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        restoreText();
+      });
 
-      if (isTinyDeletedFragment(unit.displayText)) {
-        unitEl.addClass("refactor-deleted-tiny");
-        deletedTextEl.title += "；右键恢复";
-        deletedTextEl.addEventListener("contextmenu", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          restoreText(unit.rawText);
-        });
-      } else {
-        const actions = unitEl.createSpan({ cls: "refactor-deleted-inline-actions" });
-        const restoreButton = actions.createEl("button", {
-          cls: "refactor-deleted-inline-btn refactor-deleted-restore-btn",
-          text: "↩ 恢复",
+      if (isScratchpadCandidate(this.unit.displayText)) {
+        const saveButton = actions.createEl("button", {
+          cls: "refactor-deleted-inline-btn refactor-deleted-save-inline-btn",
+          text: "📦 存灵感",
           type: "button",
         });
-        restoreButton.title = "只将这句删除内容恢复到原位置";
-        restoreButton.addEventListener("click", (event) => {
+        saveButton.title = "只将这句删除内容保存到灵感抽屉";
+        let saving = false;
+        saveButton.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
-          restoreText(unit.rawText);
+          if (saving || !globalSaveCallback) return;
+          saving = true;
+          saveButton.disabled = true;
+          saveButton.setText("✓ 已存");
+          void Promise.resolve(globalSaveCallback(this.unit.displayText)).catch(() => {
+            saving = false;
+            saveButton.disabled = false;
+            saveButton.setText("📦 存灵感");
+          });
         });
-
-        if (isScratchpadCandidate(unit.displayText)) {
-          const saveButton = actions.createEl("button", {
-            cls: "refactor-deleted-inline-btn refactor-deleted-save-inline-btn",
-            text: "📦 存灵感",
-            type: "button",
-          });
-          saveButton.title = "只将这句删除内容保存到灵感抽屉";
-          saveButton.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (globalSaveCallback) globalSaveCallback(unit.displayText);
-          });
-        }
       }
-
-      if (trailingWhitespace) wrapper.appendText(trailingWhitespace);
     }
+
+    if (trailingWhitespace) wrapper.appendText(trailingWhitespace);
 
     return wrapper;
   }
 
-  eq(other: DeletedInlineWidget): boolean {
+  eq(other: DeletedUnitWidget): boolean {
     return (
-      other.deletedText === this.deletedText &&
+      other.unit.rawText === this.unit.rawText &&
       other.isLive === this.isLive &&
       other.fallbackPosition === this.fallbackPosition
     );
@@ -213,6 +221,7 @@ export const refactorLensField = StateField.define<DecorationSet>({
 
         const docLength = tr.newDoc.length;
         const items: DecorationItem[] = [];
+        const renderedDeletionKeys = new Set<string>();
 
         // 1. 挂载段落搬家徽标
         for (const pair of movedPairs) {
@@ -247,14 +256,17 @@ export const refactorLensField = StateField.define<DecorationSet>({
             const cleanText = seg.text.trim();
             if (cleanText.length === 0) continue;
 
-            items.push({
-              from: pos,
-              to: pos,
-              deco: Decoration.widget({
-                widget: new DeletedInlineWidget(seg.text, pos, false),
-                side: 1,
-              }),
-            });
+            renderedDeletionKeys.add(`${pos}\u0000${seg.text}`);
+            for (const unit of splitDeletedTextUnits(seg.text)) {
+              items.push({
+                from: pos,
+                to: pos,
+                deco: Decoration.widget({
+                  widget: new DeletedUnitWidget(unit, pos, false),
+                  side: 1,
+                }),
+              });
+            }
           }
         }
 
@@ -264,15 +276,18 @@ export const refactorLensField = StateField.define<DecorationSet>({
             const pos = Math.min(docLength, Math.max(0, item.pos));
             const cleanText = item.text.trim();
             if (cleanText.length === 0) continue;
+            if (renderedDeletionKeys.has(`${pos}\u0000${item.text}`)) continue;
 
-            items.push({
-              from: pos,
-              to: pos,
-              deco: Decoration.widget({
-                widget: new DeletedInlineWidget(item.text, pos, true),
-                side: 1,
-              }),
-            });
+            for (const unit of splitDeletedTextUnits(item.text)) {
+              items.push({
+                from: pos,
+                to: pos,
+                deco: Decoration.widget({
+                  widget: new DeletedUnitWidget(unit, pos, true),
+                  side: 1,
+                }),
+              });
+            }
           }
         }
 

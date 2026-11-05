@@ -1,6 +1,7 @@
 const DiffMatchPatch = require("diff-match-patch");
 const fs = require("fs");
 const path = require("path");
+const ts = require("typescript");
 
 class CopywritingComparator {
   constructor() {
@@ -296,7 +297,7 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
     css.includes(".refactor-deleted-inline-actions") &&
       decorationSource.includes("refactor-deleted-restore-btn") &&
       decorationSource.includes('addEventListener("contextmenu"') &&
-      decorationSource.includes("changes: { from: insertPosition, insert: rawText }")
+      decorationSource.includes("changes: { from: insertPosition, insert: this.unit.rawText }")
   );
   const floatingSource = fs.readFileSync(path.join(__dirname, "../src/ui/floating-copilot.ts"), "utf-8");
   assert(
@@ -304,7 +305,8 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
     css.includes(".refactor-is-hidden") &&
       !css.includes(":has(") &&
       floatingSource.includes("if (active) {") &&
-      floatingSource.includes("this.hideSelectionPopover();")
+      floatingSource.includes("this.hideSelectionPopover();") &&
+      floatingSource.includes('document.removeEventListener("pointerup", this.selectionListener)')
   );
 }
 
@@ -331,11 +333,27 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
 
   const policySource = fs.readFileSync(path.join(__dirname, "../src/ui/deleted-text-policy.ts"), "utf-8");
   const decorationSource = fs.readFileSync(path.join(__dirname, "../src/ui/cm-decorations.ts"), "utf-8");
+  const compiledPolicy = ts.transpileModule(policySource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const policyModule = { exports: {} };
+  new Function("module", "exports", compiledPolicy)(policyModule, policyModule.exports);
+  const deletedSample = "第一句单独恢复。第二句也能单独保存！\n\n### 独立标题\n最后一行";
+  const units = policyModule.exports.splitDeletedTextUnits(deletedSample);
   assert(
     "大删除块会按句末标点和换行拆成独立恢复单元",
-    policySource.includes("splitDeletedTextUnits") &&
-      policySource.includes("SENTENCE_ENDINGS") &&
-      decorationSource.includes("for (const unit of splitDeletedTextUnits(this.deletedText))")
+    units.length === 4 &&
+      units.map((unit) => unit.rawText).join("") === deletedSample &&
+      units[0].displayText === "第一句单独恢复。" &&
+      !units[0].rawText.includes("第二句") &&
+      decorationSource.includes("new DeletedUnitWidget(unit, pos")
+  );
+
+  const scratchpadViewSource = fs.readFileSync(path.join(__dirname, "../src/scratchpad/scratchpad-view.ts"), "utf-8");
+  assert(
+    "灵感抽屉只允许最后一次异步刷新写入界面，避免同一条目重复显示",
+    scratchpadViewSource.includes("const revision = ++this.renderRevision") &&
+      scratchpadViewSource.includes("if (revision !== this.renderRevision) return")
   );
 }
 

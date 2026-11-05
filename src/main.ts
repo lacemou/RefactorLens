@@ -36,17 +36,12 @@ export default class RefactorLensPlugin extends Plugin {
     );
     this.codexEngine = new CodexCliEngine(this.settings.codexCliPath);
 
-    // 监听灵感抽屉变更事件，实现零延迟全局自动静默刷新（无论来自哪里的改写或暂存）
-    this.scratchpadManager.onUpdate(() => {
-      this.refreshScratchpadViews();
-    });
-
     // 1. 注册 CodeMirror 6 修订透镜扩展
     this.registerEditorExtension([refactorLensField]);
 
     // 2. 注册已删除红字的一键暂存全局回调 (就近保存在当前文稿同级目录)
     registerDeletedTextSaveHandler((deletedText: string) => {
-      void this.saveDeletedText(deletedText);
+      return this.saveDeletedText(deletedText);
     });
 
     // 3. 注册灵感暂存抽屉侧边栏视图
@@ -211,14 +206,12 @@ export default class RefactorLensPlugin extends Plugin {
     const fileName = activeView?.file?.basename || "已删除文字";
     await this.scratchpadManager.addItem(deletedText, fileName, activeView?.file?.path);
     new Notice("📦 已成功将删除文字暂存至当前文章的灵感抽屉！");
-    this.refreshScratchpadViews();
   }
 
   private async saveSelection(selection: string, view: MarkdownView): Promise<void> {
     const fileName = view.file?.basename || "当前文稿";
     await this.scratchpadManager.addItem(selection, fileName, view.file?.path);
     new Notice("📦 已成功暂存至灵感抽屉！");
-    this.refreshScratchpadViews();
   }
 
   private isSettingsData(value: unknown): value is Partial<RefactorLensSettings> {
