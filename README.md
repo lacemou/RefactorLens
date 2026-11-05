@@ -16,7 +16,8 @@ RefactorLens is built for writers who keep multiple Markdown drafts and want to 
 - Switch baselines from a compact control in the note header.
 - See added text, deleted text, and the overall rewrite ratio in the active editor.
 - Keep deleted text inline instead of interrupting the draft with block cards or multi-select controls.
-- Restore any deleted fragment directly at its original position. Deleted text only offers a scratchpad action when it is substantial enough to stand as a reusable sentence.
+- Large deletions are split into sentence- or line-level units, so each useful unit can be restored or saved independently.
+- Tiny deletions stay visually quiet: they show no action buttons and can be restored with a right-click. A scratchpad action appears only for reusable sentence-length content.
 - Keep all comparison marks in CodeMirror decorations; the baseline lens does not write diff syntax into the note.
 - Continue editing while the comparison refreshes.
 
@@ -149,7 +150,8 @@ Please avoid including private note content, credentials, or personal paths in a
 - 通过文档顶部的小药丸快速切换底稿。
 - 在当前编辑器内查看新增、删除文字和整体重构率。
 - 删除内容保持为轻量行内痕迹，不再用块级卡片或复选框切断正文。
-- 任意删除片段都可在原位置直接恢复；只有达到可独立复用的一句话时，才显示“存灵感”入口。
+- 大段删除内容会继续按句子或独立行拆分，每个有价值的单元都能分别恢复或存入灵感抽屉。
+- 零碎删字不显示操作按钮，右键即可原位恢复；只有达到可独立复用的一句话时，才显示“存灵感”入口。
 - 差异标记只存在于 CodeMirror 显示层，不向源文件写入 Diff 语法。
 - 编辑正文时实时刷新比对结果。
 

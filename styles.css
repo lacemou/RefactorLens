@@ -1105,10 +1105,20 @@
 
 .refactor-deleted-widget {
   display: inline;
+  white-space: pre-wrap;
 }
 
-.refactor-deleted-widget .refactor-diff-deleted {
-  white-space: pre-wrap;
+.refactor-deleted-unit {
+  display: inline;
+}
+
+.refactor-deleted-tiny .refactor-diff-deleted {
+  cursor: context-menu !important;
+}
+
+.refactor-deleted-widget-restoring {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .refactor-deleted-inline-actions {

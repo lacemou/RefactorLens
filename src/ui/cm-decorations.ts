@@ -2,7 +2,11 @@ import { RangeSetBuilder, StateField, StateEffect } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import { DocumentDiffResult } from "../diff/comparator";
 import { MovedPair } from "../diff/moved-detector";
-import { isScratchpadCandidate } from "./deleted-text-policy";
+import {
+  isScratchpadCandidate,
+  isTinyDeletedFragment,
+  splitDeletedTextUnits,
+} from "./deleted-text-policy";
 
 type SaveTextCallback = (text: string) => void;
 let globalSaveCallback: SaveTextCallback | null = null;
@@ -28,22 +32,15 @@ class DeletedInlineWidget extends WidgetType {
 
   toDOM(view: EditorView): HTMLElement {
     const wrapper = createSpan({ cls: "refactor-deleted-widget" });
-    const span = wrapper.createSpan({
-      cls: `refactor-diff-deleted ${this.isLive ? "refactor-live-deleted" : ""}`,
-      text: this.deletedText,
-    });
-    span.title = this.isLive ? "本次编辑中删除的内容" : "相对底稿已删除的内容";
+    let restoring = false;
 
-    const actions = wrapper.createSpan({ cls: "refactor-deleted-inline-actions" });
-    const restoreButton = actions.createEl("button", {
-      cls: "refactor-deleted-inline-btn refactor-deleted-restore-btn",
-      text: "↩ 恢复",
-      type: "button",
-    });
-    restoreButton.title = "将这段删除内容直接恢复到原位置";
-    restoreButton.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    const restoreText = (rawText: string) => {
+      if (restoring) return;
+      restoring = true;
+      wrapper.addClass("refactor-deleted-widget-restoring");
+      wrapper.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
+        button.disabled = true;
+      });
 
       let insertPosition = this.fallbackPosition;
       try {
@@ -53,26 +50,65 @@ class DeletedInlineWidget extends WidgetType {
       }
       insertPosition = Math.min(view.state.doc.length, Math.max(0, insertPosition));
       view.dispatch({
-        changes: { from: insertPosition, insert: this.deletedText },
-        selection: { anchor: insertPosition + this.deletedText.length },
+        changes: { from: insertPosition, insert: rawText },
+        selection: { anchor: insertPosition + rawText.length },
         scrollIntoView: true,
       });
       view.focus();
-    });
+    };
 
-    const textToSave = this.deletedText.trim();
-    if (isScratchpadCandidate(textToSave)) {
-      const saveButton = actions.createEl("button", {
-        cls: "refactor-deleted-inline-btn refactor-deleted-save-inline-btn",
-        text: "📦 存灵感",
-        type: "button",
+    for (const unit of splitDeletedTextUnits(this.deletedText)) {
+      const leadingWhitespace = unit.rawText.match(/^\s*/u)?.[0] || "";
+      const contentEnd = unit.rawText.length - (unit.rawText.match(/\s*$/u)?.[0].length || 0);
+      const trailingWhitespace = unit.rawText.slice(contentEnd);
+
+      if (leadingWhitespace) wrapper.appendText(leadingWhitespace);
+      const unitEl = wrapper.createSpan({ cls: "refactor-deleted-unit" });
+
+      const deletedTextEl = unitEl.createSpan({
+        cls: `refactor-diff-deleted ${this.isLive ? "refactor-live-deleted" : ""}`,
+        text: unit.displayText,
       });
-      saveButton.title = "将这句删除内容保存到灵感抽屉";
-      saveButton.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (globalSaveCallback) globalSaveCallback(textToSave);
-      });
+      deletedTextEl.title = this.isLive ? "本次编辑中删除的内容" : "相对底稿已删除的内容";
+
+      if (isTinyDeletedFragment(unit.displayText)) {
+        unitEl.addClass("refactor-deleted-tiny");
+        deletedTextEl.title += "；右键恢复";
+        deletedTextEl.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          restoreText(unit.rawText);
+        });
+      } else {
+        const actions = unitEl.createSpan({ cls: "refactor-deleted-inline-actions" });
+        const restoreButton = actions.createEl("button", {
+          cls: "refactor-deleted-inline-btn refactor-deleted-restore-btn",
+          text: "↩ 恢复",
+          type: "button",
+        });
+        restoreButton.title = "只将这句删除内容恢复到原位置";
+        restoreButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          restoreText(unit.rawText);
+        });
+
+        if (isScratchpadCandidate(unit.displayText)) {
+          const saveButton = actions.createEl("button", {
+            cls: "refactor-deleted-inline-btn refactor-deleted-save-inline-btn",
+            text: "📦 存灵感",
+            type: "button",
+          });
+          saveButton.title = "只将这句删除内容保存到灵感抽屉";
+          saveButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (globalSaveCallback) globalSaveCallback(unit.displayText);
+          });
+        }
+      }
+
+      if (trailingWhitespace) wrapper.appendText(trailingWhitespace);
     }
 
     return wrapper;

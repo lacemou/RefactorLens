@@ -292,10 +292,11 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
       !decorationSource.includes("DeletedBlockCardWidget")
   );
   assert(
-    "删除痕迹提供轻量行内恢复操作",
+    "句子级删除痕迹提供轻量行内恢复，零碎删字支持右键恢复",
     css.includes(".refactor-deleted-inline-actions") &&
       decorationSource.includes("refactor-deleted-restore-btn") &&
-      decorationSource.includes("changes: { from: insertPosition, insert: this.deletedText }")
+      decorationSource.includes('addEventListener("contextmenu"') &&
+      decorationSource.includes("changes: { from: insertPosition, insert: rawText }")
   );
   const floatingSource = fs.readFileSync(path.join(__dirname, "../src/ui/floating-copilot.ts"), "utf-8");
   assert(
@@ -318,10 +319,24 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
     return endsLikeSentence || meaningfulText.length >= 12;
   }
 
+  function isTinyDeletedFragment(text) {
+    return text.replace(/[\s\p{P}\p{S}]/gu, "").length <= 4;
+  }
+
   assert("删除 1～4 个字不出现灵感暂存入口", !isScratchpadCandidate("删掉四字"));
+  assert("删除 1～4 个字被识别为仅右键恢复的零碎删字", isTinyDeletedFragment("删掉四字"));
   assert("有完整句意与句末标点的删除内容可以暂存", isScratchpadCandidate("这句话值得留下。"));
   assert("足够长但没有句末标点的独立表达可以暂存", isScratchpadCandidate("这是一段足够完整并且可以复用的表达"));
   assert("不足一句的短语不进入灵感抽屉", !isScratchpadCandidate("短小片段"));
+
+  const policySource = fs.readFileSync(path.join(__dirname, "../src/ui/deleted-text-policy.ts"), "utf-8");
+  const decorationSource = fs.readFileSync(path.join(__dirname, "../src/ui/cm-decorations.ts"), "utf-8");
+  assert(
+    "大删除块会按句末标点和换行拆成独立恢复单元",
+    policySource.includes("splitDeletedTextUnits") &&
+      policySource.includes("SENTENCE_ENDINGS") &&
+      decorationSource.includes("for (const unit of splitDeletedTextUnits(this.deletedText))")
+  );
 }
 
 // Test 6: Codex 输出前缀清洗与纯度测试
