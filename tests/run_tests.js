@@ -277,14 +277,26 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   assert("删除中间条目后，上下条目完好无损且各自可被继续独立删除", newParsed.length === 2 && newParsed[0].id === itemA.id && newParsed[1].id === itemC.id);
 }
 
-// Test 4: CSS 规范检查 (确保红色删除文字可选中 cursor: text，无竖线，段落还原换行、单段hover与多选批量暂存)
+// Test 4: 删除痕迹保持行内连续，并提供直接恢复而非卡片多选
 {
   const cssPath = path.join(__dirname, "../styles.css");
   const css = fs.readFileSync(cssPath, "utf-8");
+  const decorationSource = fs.readFileSync(path.join(__dirname, "../src/ui/cm-decorations.ts"), "utf-8");
 
   assert("红色删除文字支持用户划选 (cursor: text)", css.includes("cursor: text !important"));
   assert("样式表中不包含 border-left: 竖线", !css.includes("border-left:"));
-  assert("已删除段落卡片具备 pre-wrap 换行还原", css.includes(".refactor-para-text") && css.includes("white-space: pre-wrap !important"));
+  assert(
+    "删除痕迹不再使用块级卡片、复选框或批量暂存",
+    !css.includes(".refactor-deleted-block-card") &&
+      !css.includes(".refactor-para-checkbox") &&
+      !decorationSource.includes("DeletedBlockCardWidget")
+  );
+  assert(
+    "删除痕迹提供轻量行内恢复操作",
+    css.includes(".refactor-deleted-inline-actions") &&
+      decorationSource.includes("refactor-deleted-restore-btn") &&
+      decorationSource.includes("changes: { from: insertPosition, insert: this.deletedText }")
+  );
   const floatingSource = fs.readFileSync(path.join(__dirname, "../src/ui/floating-copilot.ts"), "utf-8");
   assert(
     "弹窗打开时由状态管理器移除选区气泡，且不使用高开销 :has 选择器",
@@ -293,10 +305,26 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
       floatingSource.includes("if (active) {") &&
       floatingSource.includes("this.hideSelectionPopover();")
   );
-  assert("支持单段 hover 工具条与多选批量暂存样式", css.includes(".refactor-para-hover-actions") && css.includes(".refactor-btn-batch-save"));
 }
 
-// Test 5: Codex 输出前缀清洗与纯度测试
+// Test 5: 只有达到完整句子门槛的删除内容才进入灵感抽屉
+{
+  function isScratchpadCandidate(text) {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    const meaningfulText = trimmed.replace(/[\s\p{P}\p{S}]/gu, "");
+    if (meaningfulText.length < 5) return false;
+    const endsLikeSentence = /[。！？!?；;…](?:["'”’）)\]}】》]*)$/u.test(trimmed);
+    return endsLikeSentence || meaningfulText.length >= 12;
+  }
+
+  assert("删除 1～4 个字不出现灵感暂存入口", !isScratchpadCandidate("删掉四字"));
+  assert("有完整句意与句末标点的删除内容可以暂存", isScratchpadCandidate("这句话值得留下。"));
+  assert("足够长但没有句末标点的独立表达可以暂存", isScratchpadCandidate("这是一段足够完整并且可以复用的表达"));
+  assert("不足一句的短语不进入灵感抽屉", !isScratchpadCandidate("短小片段"));
+}
+
+// Test 6: Codex 输出前缀清洗与纯度测试
 {
   function cleanOutput(text) {
     let s = text.trim();
@@ -315,7 +343,7 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   assert("数字序号前缀被彻底剥离", cleanOutput(dirty3) === "这是一句经过数字编号的句子。");
 }
 
-// Test 6: 仅采纳半句智能融合拼接测试
+// Test 7: 仅采纳半句智能融合拼接测试
 {
   function computeHalfSentenceMerge(origText, candText, selectedPart) {
     const orig = origText.trim();

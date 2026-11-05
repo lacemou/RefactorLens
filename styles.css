@@ -1101,236 +1101,61 @@
 }
 
 
-/* ================= 宏观大段删除独立卡片 (彻底解决文字挤堆排版) ================= */
+/* ================= 轻量行内删除操作 ================= */
 
-.refactor-deleted-block-card {
-  display: block;
-  width: 100%;
-  margin: 12px 0;
-  padding: 10px 14px;
-  background-color: rgba(239, 68, 68, 0.04);
-  border: 1px dashed rgba(239, 68, 68, 0.35);
-  border-radius: 8px;
-  box-sizing: border-box;
-  user-select: text !important;
-  -webkit-user-select: text !important;
+.refactor-deleted-widget {
+  display: inline;
 }
 
-.theme-dark .refactor-deleted-block-card {
-  background-color: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.45);
+.refactor-deleted-widget .refactor-diff-deleted {
+  white-space: pre-wrap;
 }
 
-.refactor-live-deleted-card {
-  background-color: rgba(244, 63, 94, 0.06);
-  border-color: rgba(244, 63, 94, 0.4);
-}
-
-.refactor-deleted-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 6px;
-  margin-bottom: 8px;
-  border-bottom: 1px dashed rgba(239, 68, 68, 0.2);
-  user-select: none !important;
-  -webkit-user-select: none !important;
-}
-
-.refactor-deleted-card-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #b91c1c;
-  opacity: 0.85;
-}
-
-.theme-dark .refactor-deleted-card-title {
-  color: #fca5a5;
-}
-
-.refactor-deleted-card-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.refactor-deleted-action-btn {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  background-color: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.refactor-deleted-action-btn:hover {
-  background-color: rgba(239, 68, 68, 0.25);
-  border-color: #ef4444;
-  transform: translateY(-0.5px);
-}
-
-.theme-dark .refactor-deleted-action-btn {
-  background-color: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.5);
-}
-
-.refactor-btn-ghost-sm {
-  background: transparent;
-  color: var(--text-muted);
-  border-color: var(--background-modifier-border);
-}
-
-.refactor-btn-ghost-sm:hover {
-  background-color: var(--background-modifier-hover);
-  color: var(--text-normal);
-}
-
-.refactor-deleted-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #b91c1c;
-  word-break: break-word;
-}
-
-.refactor-deleted-para {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-  border: 1px solid transparent;
-}
-
-.refactor-deleted-para:hover {
-  background-color: rgba(239, 68, 68, 0.05);
-}
-
-.refactor-deleted-para.refactor-para-selected {
-  background-color: rgba(239, 68, 68, 0.09);
-  border-color: rgba(239, 68, 68, 0.35);
-}
-
-.theme-dark .refactor-deleted-para:hover {
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
-.theme-dark .refactor-deleted-para.refactor-para-selected {
-  background-color: rgba(239, 68, 68, 0.16);
-  border-color: rgba(248, 113, 113, 0.45);
-}
-
-.refactor-para-check-label {
-  display: flex;
-  align-items: center;
-  padding-top: 3px;
-  cursor: pointer;
+.refactor-deleted-inline-actions {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  margin: 0 3px;
+  vertical-align: baseline;
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.refactor-para-checkbox {
-  cursor: pointer;
-  opacity: 0.3;
-  transition: opacity 0.15s ease;
-  accent-color: #ef4444;
-}
-
-.refactor-deleted-para:hover .refactor-para-checkbox,
-.refactor-para-checkbox:checked {
+.refactor-deleted-widget:hover .refactor-deleted-inline-actions,
+.refactor-deleted-inline-actions:focus-within {
   opacity: 1;
 }
 
-.refactor-para-text {
-  flex: 1;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #b91c1c;
-  text-decoration: line-through;
-  text-decoration-color: rgba(239, 68, 68, 0.6);
-  text-decoration-thickness: 1.5px;
-  white-space: pre-wrap !important;
-  word-break: break-word;
-  user-select: text !important;
-  -webkit-user-select: text !important;
-  opacity: 0.85;
-}
-
-.theme-dark .refactor-para-text {
-  color: #fca5a5;
-  text-decoration-color: rgba(248, 113, 113, 0.6);
-}
-
-.refactor-deleted-divider {
-  opacity: 0.4;
-  padding: 2px 10px;
-}
-
-.refactor-para-hover-actions {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-  background-color: var(--background-primary);
-  padding: 2px 4px;
-  border-radius: 4px;
+.refactor-deleted-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 5px;
   border: 1px solid var(--background-modifier-border);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-}
-
-.refactor-deleted-para:hover .refactor-para-hover-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.refactor-para-btn {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  background-color: rgba(239, 68, 68, 0.1);
-  color: #b91c1c;
-  cursor: pointer;
-  transition: all 0.12s ease;
-}
-
-.refactor-para-btn:hover {
-  background-color: rgba(239, 68, 68, 0.25);
-  border-color: #ef4444;
-}
-
-.theme-dark .refactor-para-btn {
-  color: #fca5a5;
-  background-color: rgba(239, 68, 68, 0.2);
-}
-
-.refactor-para-btn-ghost {
-  background: transparent;
-  border-color: var(--background-modifier-border);
+  border-radius: 9px;
+  background-color: var(--background-primary);
   color: var(--text-muted);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
 }
 
-.refactor-para-btn-ghost:hover {
-  background-color: var(--background-modifier-hover);
+.refactor-deleted-inline-btn:hover,
+.refactor-deleted-inline-btn:focus-visible {
+  border-color: var(--interactive-accent);
   color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
 }
 
-.refactor-btn-batch-save {
-  background-color: var(--interactive-accent) !important;
-  color: var(--text-on-accent) !important;
-  border-color: var(--interactive-accent) !important;
-  font-weight: 600;
+.refactor-deleted-restore-btn:hover,
+.refactor-deleted-restore-btn:focus-visible {
+  color: var(--interactive-accent);
+}
+
+.refactor-deleted-save-inline-btn:hover,
+.refactor-deleted-save-inline-btn:focus-visible {
+  border-color: #d97706;
+  color: #b45309;
 }

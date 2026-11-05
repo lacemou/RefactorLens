@@ -6,7 +6,7 @@
 
 RefactorLens is built for writers who keep multiple Markdown drafts and want to review revisions without turning their notes into raw diff output or CriticMarkup. It overlays additions, deletions, and likely paragraph moves directly in the active Obsidian editor while keeping the underlying Markdown clean.
 
-> RefactorLens is currently an early preview (`0.1.1`). It is desktop-only and is being prepared for Obsidian Community Plugins review.
+> RefactorLens is available in Obsidian Community Plugins and currently supports desktop only.
 
 ## Features
 
@@ -15,6 +15,8 @@ RefactorLens is built for writers who keep multiple Markdown drafts and want to 
 - Choose any Markdown file in the vault as the comparison baseline.
 - Switch baselines from a compact control in the note header.
 - See added text, deleted text, and the overall rewrite ratio in the active editor.
+- Keep deleted text inline instead of interrupting the draft with block cards or multi-select controls.
+- Restore any deleted fragment directly at its original position. Deleted text only offers a scratchpad action when it is substantial enough to stand as a reusable sentence.
 - Keep all comparison marks in CodeMirror decorations; the baseline lens does not write diff syntax into the note.
 - Continue editing while the comparison refreshes.
 
@@ -38,7 +40,7 @@ Codex rewriting requires a locally installed and authenticated [OpenAI Codex CLI
 
 ### Inspiration scratchpad
 
-- Save selected text or removed passages without losing them.
+- Save selected text or sentence-length removed passages without losing them. Tiny deletions are intentionally excluded.
 - Store scratchpad content beside the current note or in one vault-level `_scratchpad.md` file.
 - Browse saved passages in a sidebar and insert them back into a note.
 
@@ -64,9 +66,11 @@ RefactorLens has no telemetry or analytics.
 - macOS or Windows. Linux may work but is not yet an officially tested target.
 - Codex CLI is optional and only required for AI rewriting.
 
-## Manual installation
+## Installation
 
-Until RefactorLens is available in Community Plugins:
+In Obsidian, open **Settings → Community plugins → Browse**, search for **Refactor Lens**, and select **Install**.
+
+For a manual development installation:
 
 1. Download or clone this repository.
 2. Install dependencies and build the plugin:
@@ -135,7 +139,7 @@ Please avoid including private note content, credentials, or personal paths in a
 
 它面向保留多版 Markdown 稿件的写作者：无需打开程序员式 Diff，也无需向正文写入 CriticMarkup，就能在当前编辑器里查看新增、删除和疑似搬迁的段落。
 
-> RefactorLens 目前是早期预览版（`0.1.1`），仅支持桌面端，正在准备接受 Obsidian Community Plugins 审核。
+> RefactorLens 已进入 Obsidian Community Plugins，目前仅支持桌面端。
 
 ## 功能
 
@@ -144,6 +148,8 @@ Please avoid including private note content, credentials, or personal paths in a
 - 可选择 Vault 中任意 Markdown 文件作为比对基准。
 - 通过文档顶部的小药丸快速切换底稿。
 - 在当前编辑器内查看新增、删除文字和整体重构率。
+- 删除内容保持为轻量行内痕迹，不再用块级卡片或复选框切断正文。
+- 任意删除片段都可在原位置直接恢复；只有达到可独立复用的一句话时，才显示“存灵感”入口。
 - 差异标记只存在于 CodeMirror 显示层，不向源文件写入 Diff 语法。
 - 编辑正文时实时刷新比对结果。
 
@@ -167,7 +173,7 @@ Please avoid including private note content, credentials, or personal paths in a
 
 ### 灵感暂存抽屉
 
-- 暂存选中文字或被删除但仍有价值的段落。
+- 暂存选中文字或达到一句话长度、仍有复用价值的删除内容；零碎删字不会进入灵感抽屉。
 - 可跟随当前文稿保存，也可集中存入 Vault 根目录下的 `_scratchpad.md`。
 - 在侧边栏浏览素材并重新插回正文。
 
@@ -193,9 +199,11 @@ RefactorLens 不包含遥测或数据分析。
 - 正式目标平台为 macOS 和 Windows；Linux 尚未作为正式测试平台。
 - Codex CLI 仅在使用 AI 改写时需要安装。
 
-## 手动安装
+## 安装
 
-在插件进入 Community Plugins 前：
+在 Obsidian 中打开 **设置 → 第三方插件 → 浏览**，搜索 **Refactor Lens** 并点击安装。
+
+如需手动安装开发版本：
 
 1. 下载或克隆本仓库。
 2. 安装依赖并构建：

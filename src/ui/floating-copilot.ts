@@ -1,5 +1,6 @@
 import { App, Editor, MarkdownView, Notice } from "obsidian";
 import { EditorView } from "@codemirror/view";
+import { isScratchpadCandidate } from "./deleted-text-policy";
 
 export interface FloatingCopilotHandlers {
   onTriggerCopilot: (editor: Editor, view: MarkdownView) => void;
@@ -95,16 +96,25 @@ export class FloatingCopilotManager {
 
         const editor = view.editor;
         const editorSel = editor.getSelection().trim();
-        const domSel = window.getSelection()?.toString().trim() || "";
+        const browserSelection = window.getSelection();
+        const domSel = browserSelection?.toString().trim() || "";
         const selection = editorSel || domSel;
 
         if (this.selectionPopoverEl && this.selectionPopoverEl.contains(e.target as Node)) {
           return;
         }
 
-        if (selection.length > 0) {
-          const isDeletedCardSelection = !editorSel && domSel.length > 0;
-          this.showSelectionPopover(editor, view, selection, isDeletedCardSelection, e.clientX, e.clientY);
+        const selectionParent = browserSelection?.anchorNode
+          ? browserSelection.anchorNode.parentElement
+          : null;
+        const isDeletedTextSelection = Boolean(
+          !editorSel &&
+          domSel.length > 0 &&
+          selectionParent?.closest(".refactor-deleted-widget")
+        );
+
+        if (selection.length > 0 && (!isDeletedTextSelection || isScratchpadCandidate(selection))) {
+          this.showSelectionPopover(editor, view, selection, isDeletedTextSelection, e.clientX, e.clientY);
         } else {
           this.hideSelectionPopover();
         }
@@ -116,7 +126,7 @@ export class FloatingCopilotManager {
     editor: Editor,
     view: MarkdownView,
     selectedText: string,
-    isDeletedCardSelection: boolean,
+    isDeletedTextSelection: boolean,
     mouseX?: number,
     mouseY?: number
   ) {
@@ -132,7 +142,7 @@ export class FloatingCopilotManager {
     this.hideSelectionPopover();
 
     let coords: { top: number; left: number; bottom: number } | null = null;
-    if (!isDeletedCardSelection) {
+    if (!isDeletedTextSelection) {
       const from = editor.getCursor("from");
       const cm = (view.editor as Editor & { cm?: EditorView }).cm;
       if (cm) {
@@ -143,8 +153,8 @@ export class FloatingCopilotManager {
 
     this.selectionPopoverEl = createDiv({ cls: "refactor-selection-popover" });
 
-    if (isDeletedCardSelection) {
-      // 在已删除红字卡片中划选任意一句话
+    if (isDeletedTextSelection) {
+      // 只对达到句子门槛的已删除文字选区提供灵感暂存。
       const saveBtn = this.selectionPopoverEl.createEl("button", {
         cls: "refactor-popover-btn refactor-btn-save",
         text: "📦 暂存所选句子至抽屉",

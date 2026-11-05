@@ -135,7 +135,7 @@ export class ScratchpadView extends ItemView {
       emptyEl.createDiv({
         cls: "refactor-scratchpad-empty-text",
         text: items.length === 0
-          ? "暂无暂存灵感。\n在文稿中选中文本点击【暂存】，或点击删除文字末尾的 📦 即可收录！"
+          ? "暂无暂存灵感。\n选中正文后点击【暂存】，或将达到一句话门槛的删除内容收入抽屉。"
           : "未找到匹配的暂存内容",
       });
       return;
