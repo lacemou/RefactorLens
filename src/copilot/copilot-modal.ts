@@ -61,7 +61,7 @@ export class InPlaceCopilotModal extends Modal {
     const inputWrapper = contentEl.createDiv({ cls: "refactor-copilot-input-wrapper" });
     this.inputEl = inputWrapper.createEl("input", {
       type: "text",
-      placeholder: "告诉 Codex 怎么改... (回车或点击下方胶囊)",
+      placeholder: "告诉改写顾问怎么改…（回车或点击下方胶囊）",
       cls: "refactor-copilot-input",
     });
 
@@ -127,7 +127,8 @@ export class InPlaceCopilotModal extends Modal {
     }
 
     this.isGenerating = true;
-    this.statusEl.setText("⚡ 正在召集 Codex 改写顾问...");
+    const model = this.codexEngine.describeModel();
+    this.statusEl.setText(`正在改写：${model}`);
     this.statusEl.addClass("refactor-copilot-loading");
     this.resultContainer.addClass("refactor-is-hidden");
 
@@ -141,12 +142,11 @@ export class InPlaceCopilotModal extends Modal {
       // 彻底清洗所有候选版本的垃圾前缀
       this.candidates = rawCandidates.map((c) => this.codexEngine.cleanOutput(c));
       this.currentCandidateIndex = 0;
-      this.statusEl.setText("");
+      this.statusEl.setText(model);
       this.statusEl.removeClass("refactor-copilot-loading");
       this.renderCurrentCandidate();
     } catch (err) {
-      console.error("改写失败:", err);
-      this.statusEl.setText("改写异常，请检查本地环境");
+      this.statusEl.setText(err instanceof Error ? err.message : "改写异常，请检查本地环境。");
       this.statusEl.removeClass("refactor-copilot-loading");
     } finally {
       this.isGenerating = false;

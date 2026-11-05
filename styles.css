@@ -136,6 +136,14 @@
   -webkit-user-select: none !important;
 }
 
+.refactor-moved-origin {
+  margin-inline-end: 0.35em;
+}
+
+.refactor-moved-badge-container > .refactor-moved-badge + .refactor-moved-badge {
+  margin-inline-start: 0.35em;
+}
+
 .refactor-moved-badge {
   display: inline-flex;
   align-items: center;
@@ -1114,11 +1122,6 @@
 
 .refactor-deleted-tiny .refactor-diff-deleted {
   cursor: context-menu !important;
-}
-
-.refactor-deleted-widget-restoring {
-  opacity: 0.45;
-  pointer-events: none;
 }
 
 .refactor-deleted-inline-actions {

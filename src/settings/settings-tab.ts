@@ -1,11 +1,11 @@
 import { App, Notice, PluginSettingTab, Setting, SettingDefinitionItem } from "obsidian";
 import type RefactorLensPlugin from "../main";
+import type { RewriteCliSettings } from "../copilot/codex-cli";
 import { StorageLocationMode } from "../scratchpad/scratchpad-manager";
 
-export interface RefactorLensSettings {
+export interface RefactorLensSettings extends RewriteCliSettings {
   benchmarkVaultPath: string;
   contextVaultPath: string;
-  codexCliPath: string;
   scratchpadMode: StorageLocationMode;
   scratchpadCustomPath: string;
 }
@@ -14,6 +14,11 @@ export const DEFAULT_SETTINGS: RefactorLensSettings = {
   benchmarkVaultPath: "",
   contextVaultPath: "",
   codexCliPath: "",
+  rewriteBackend: "codex",
+  codexModel: "",
+  deepseekCliPath: "",
+  deepseekProvider: "",
+  deepseekModel: "",
   scratchpadMode: "same_folder",
   scratchpadCustomPath: "_scratchpad.md",
 };
@@ -83,8 +88,13 @@ export class RefactorLensSettingTab extends PluginSettingTab {
       },
       {
         type: "group",
-        heading: "⚡ Codex CLI 与 AI 改写",
+        heading: "⚡ AI 改写引擎与模型",
         items: [
+          {
+            name: "改写引擎",
+            desc: "选择本机已安装的 CLI。只有主动发起改写才会将选区发送给所选引擎。",
+            control: { type: "dropdown", key: "rewriteBackend", options: { codex: "Codex CLI", deepseek: "DeepSeek Harness (dsh)" } },
+          },
           {
             name: "Codex CLI 程序路径",
             desc: "可留空自动探测；若探测失败，可填写 Codex CLI 的系统绝对路径。",
@@ -95,22 +105,36 @@ export class RefactorLensSettingTab extends PluginSettingTab {
             },
           },
           {
-            name: "Codex CLI 运行与登录状态",
-            desc: "检查本机是否能够调用 Codex CLI。",
+            name: "Codex 模型 ID",
+            desc: "填写当前 Codex 账号或网关支持的模型 ID。留空时沿用 Codex 自己的配置。",
+            control: { type: "text", key: "codexModel", placeholder: "跟随 Codex 配置" },
+          },
+          {
+            name: "DeepSeek Harness 程序路径",
+            desc: "可留空自动探测 dsh；也可填写其绝对路径。",
+            control: { type: "text", key: "deepseekCliPath", placeholder: "留空自动探测" },
+          },
+          {
+            name: "DeepSeek Harness 提供方 ID",
+            desc: "指定模型时使用的 Harness 路由 ID。留空使用 deepseek-official；自定义网关请填已配置的 ID。",
+            control: { type: "text", key: "deepseekProvider", placeholder: "deepseek-official" },
+          },
+          {
+            name: "DeepSeek Harness 模型 ID",
+            desc: "填写该路由支持的 ID，例如 deepseek-flash。留空时沿用 Harness 的 headless 配置。",
+            control: { type: "text", key: "deepseekModel", placeholder: "跟随 Harness 配置" },
+          },
+          {
+            name: "当前引擎状态",
+            desc: "检查当前选择的本地 CLI；不会发送文稿或测试模型调用。",
             render: (setting) => {
               setting
                 .addButton((button) =>
                   button
                     .setButtonText("测试连接")
                     .setCta()
-                    .onClick(() => void this.testCodexConnection(setting))
-                )
-                .addButton((button) =>
-                  button.setButtonText("查看登录命令").onClick(() => {
-                    new Notice("请打开系统终端并运行 Codex CLI 登录命令。", 8000);
-                  })
+                    .onClick(() => void this.testConnection(setting))
                 );
-              void this.testCodexConnection(setting);
             },
           },
         ],
@@ -129,7 +153,7 @@ export class RefactorLensSettingTab extends PluginSettingTab {
           },
           {
             name: "行内改写",
-            desc: "划选文字后呼出 Codex 顾问，可整句或分句采纳，并可备份旧句。",
+            desc: "划选文字后呼出改写顾问，可整句或分句采纳，并可备份旧句。",
           },
           {
             name: "快捷键",
@@ -143,9 +167,8 @@ export class RefactorLensSettingTab extends PluginSettingTab {
   async setControlValue(key: string, value: unknown): Promise<void> {
     await super.setControlValue(key, value);
 
-    if (key === "codexCliPath" && typeof value === "string") {
-      this.plugin.codexEngine.setCustomBinaryPath(value.trim());
-    } else if (key === "scratchpadMode" && (value === "same_folder" || value === "vault_root")) {
+    this.plugin.codexEngine.configure(this.plugin.settings);
+    if (key === "scratchpadMode" && (value === "same_folder" || value === "vault_root")) {
       this.plugin.scratchpadManager.setMode(value);
       new Notice(`灵感抽屉模式已切换为：${value === "same_folder" ? "跟随文稿同级目录" : "全库统一存放"}`);
     } else if (key === "scratchpadCustomPath" && typeof value === "string") {
@@ -153,19 +176,25 @@ export class RefactorLensSettingTab extends PluginSettingTab {
     }
   }
 
-  private async testCodexConnection(setting: Setting): Promise<void> {
-    setting.setDesc("🔍 正在探测本地环境与 Codex CLI 状态...");
-    const detect = await this.plugin.codexEngine.detectCodexPath();
+  private async testConnection(setting: Setting): Promise<void> {
+    const settings = { ...this.plugin.settings };
+    const model = this.plugin.codexEngine.describeModel();
+    setting.setDesc(`正在检查 ${model}…`);
+    const detect = await this.plugin.codexEngine.detectCli(settings);
 
     if (!detect.available) {
-      setting.setDesc("⚠️ 未在系统默认路径找到 codex 命令。可在上方填写 `which codex` 返回的绝对路径。");
+      setting.setDesc(`无法启动 ${model}。请在终端检查安装，或填写程序绝对路径。`);
       return;
     }
 
+    if (settings.rewriteBackend === "deepseek") {
+      setting.setDesc(`已检测到 ${model}。请在 Harness 的 headless 环境配置认证；此检查未调用模型。`);
+      return;
+    }
     const loginStatus = await this.plugin.codexEngine.checkLoginStatus(detect.path);
     const isLoggedIn = /chatgpt|logged in/i.test(loginStatus);
     if (isLoggedIn) {
-      setting.setDesc(`✅ 已连接 Codex CLI (${detect.version || "就绪"})，登录状态：${loginStatus}。`);
+      setting.setDesc(`✅ ${model}，登录状态：${loginStatus}。`);
     } else {
       setting.setDesc(
         `⚠️ 已检测到 Codex CLI：${detect.path} (${detect.version || "版本未知"})，但登录状态为：${loginStatus}。请在系统终端执行 \`codex login\`。`

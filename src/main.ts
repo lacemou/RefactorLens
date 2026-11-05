@@ -3,7 +3,7 @@ import { EditorView } from "@codemirror/view";
 import * as fs from "fs";
 import { CopywritingComparator } from "./diff/comparator";
 import { MovedBlockDetector } from "./diff/moved-detector";
-import { refactorLensField, setRefactorDiffEffect, registerDeletedTextSaveHandler } from "./ui/cm-decorations";
+import { movedPairsField, refactorLensField, setRefactorDiffEffect, registerDeletedTextSaveHandler } from "./ui/cm-decorations";
 import { BaselinePillView } from "./ui/baseline-pill";
 import { RefactorLensSettings, DEFAULT_SETTINGS, RefactorLensSettingTab } from "./settings/settings-tab";
 import { ScratchpadManager } from "./scratchpad/scratchpad-manager";
@@ -34,10 +34,10 @@ export default class RefactorLensPlugin extends Plugin {
       this.settings.scratchpadCustomPath,
       this.settings.scratchpadMode
     );
-    this.codexEngine = new CodexCliEngine(this.settings.codexCliPath);
+    this.codexEngine = new CodexCliEngine(this.settings);
 
     // 1. 注册 CodeMirror 6 修订透镜扩展
-    this.registerEditorExtension([refactorLensField]);
+    this.registerEditorExtension([movedPairsField, refactorLensField]);
 
     // 2. 注册已删除红字的一键暂存全局回调 (就近保存在当前文稿同级目录)
     registerDeletedTextSaveHandler((deletedText: string) => {
@@ -76,7 +76,7 @@ export default class RefactorLensPlugin extends Plugin {
         void this.activateScratchpadView();
       },
       isCodexReady: async () => {
-        const detect = await this.codexEngine.detectCodexPath();
+        const detect = await this.codexEngine.detectCli();
         return detect.available;
       },
       onOpenSettings: () => {
@@ -102,7 +102,7 @@ export default class RefactorLensPlugin extends Plugin {
 
     this.addCommand({
       id: "open-inline-copilot",
-      name: "呼出行内 Codex 改写顾问",
+      name: "呼出行内改写顾问",
       editorCallback: (editor: Editor, view: MarkdownView) => {
         void this.openCopilotModal(editor, view);
       },
@@ -136,7 +136,7 @@ export default class RefactorLensPlugin extends Plugin {
         if (selection) {
           menu.addItem((item) => {
             item
-              .setTitle("✨ 行内呼出 Codex 改写顾问")
+              .setTitle("✨ 行内呼出改写顾问")
               .setIcon("wand")
               .onClick(() => {
                 void this.openCopilotModal(editor, view);
@@ -403,11 +403,13 @@ export default class RefactorLensPlugin extends Plugin {
     }
 
     try {
-      const baselineText = await this.app.vault.read(baselineFile);
-      const currentText = view.editor.getValue();
+      const baselineText = (await this.app.vault.cachedRead(baselineFile)).replace(/\r\n/g, "\n");
+      if (view.file?.path !== fileKey || this.activeBaselines.get(fileKey) !== baselineFile ||
+          this.getCM6View(view) !== cmView) return;
+      const currentText = cmView.state.doc.toString();
 
       const diffResult = this.comparator.compare(baselineText, currentText);
-      const movedPairs = this.movedDetector.detect(baselineText, currentText);
+      const movedPairs = this.movedDetector.detect(baselineText, currentText, diffResult);
 
       const sessionSnapshot = this.sessionSnapshots.get(fileKey);
       const sessionLiveDeletes: Array<{ text: string; pos: number }> = [];

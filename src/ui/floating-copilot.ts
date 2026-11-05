@@ -47,7 +47,7 @@ export class FloatingCopilotManager {
     this.floatingBallEl = createDiv({ cls: "refactor-floating-ball" });
     this.floatingBallEl.createSpan({ cls: "refactor-ball-icon", text: "✨" });
     this.floatingBallEl.createSpan({ cls: "refactor-ball-tooltip", text: "RefactorLens AI 顾问" });
-    this.floatingBallEl.title = "点击呼出 Codex 改写顾问 (若已选中文本将直接改写)";
+    this.floatingBallEl.title = "点击呼出改写顾问（若已选中文本将直接改写）";
 
     this.floatingBallEl.addEventListener("click", (e) => {
       e.preventDefault();
@@ -233,7 +233,7 @@ export class FloatingCopilotManager {
     header.createSpan({ cls: "refactor-menu-title", text: "✨ RefactorLens AI 助手" });
     header.createSpan({
       cls: `refactor-menu-status ${isReady ? "ready" : "warning"}`,
-      text: isReady ? "● Codex就绪" : "● 待配置",
+      text: isReady ? "● CLI 就绪" : "● 待配置",
     });
     const copilotAction = this.createMenuItem(menu, "✍️", "改写当前文稿 (先划选文字)");
     const scratchpadAction = this.createMenuItem(menu, "📦", "打开灵感暂存抽屉");

@@ -44,134 +44,23 @@ class CopywritingComparator {
   }
 }
 
-class MovedBlockDetector {
-  cleanText(str) {
-    return str.replace(/[#*`>\-_0-9\.\s，。、“”《》！？：；（）()\[\]【】\/\\]/g, "");
-  }
-
-  stringSimilarity(s1, s2) {
-    const str1 = this.cleanText(s1);
-    const str2 = this.cleanText(s2);
-    if (str1 === str2) return 1.0;
-    if (str1.length < 2 || str2.length < 2) return 0.0;
-
-    const bigrams1 = new Map();
-    for (let i = 0; i < str1.length - 1; i++) {
-      const bg = str1.substring(i, i + 2);
-      bigrams1.set(bg, (bigrams1.get(bg) || 0) + 1);
-    }
-
-    let intersection = 0;
-    for (let i = 0; i < str2.length - 1; i++) {
-      const bg = str2.substring(i, i + 2);
-      const count = bigrams1.get(bg) || 0;
-      if (count > 0) {
-        bigrams1.set(bg, count - 1);
-        intersection++;
-      }
-    }
-
-    return (2.0 * intersection) / (str1.length - 1 + str2.length - 1);
-  }
-
-  splitParagraphs(text) {
-    const blocks = [];
-    const lines = text.split("\n");
-    let offset = 0;
-    let buf = "";
-    let start = 0;
-
-    lines.forEach((line) => {
-      if (line.trim() === "") {
-        if (buf.trim().length > 0) {
-          blocks.push({
-            text: buf,
-            from: start,
-            to: start + buf.length,
-            cleanLen: this.cleanText(buf).length,
-          });
-        }
-        buf = "";
-        offset += line.length + 1;
-        start = offset;
-      } else {
-        if (buf.length === 0) start = offset;
-        buf += (buf.length > 0 ? "\n" : "") + line;
-        offset += line.length + 1;
-      }
-    });
-
-    if (buf.trim().length > 0) {
-      blocks.push({
-        text: buf,
-        from: start,
-        to: start + buf.length,
-        cleanLen: this.cleanText(buf).length,
-      });
-    }
-
-    return blocks;
-  }
-
-  detect(baselineText, currentText) {
-    const baseBlocks = this.splitParagraphs(baselineText);
-    const currBlocks = this.splitParagraphs(currentText);
-    const movedPairs = [];
-    const matchedBaseIndices = new Set();
-
-    currBlocks.forEach((cBlock, cIdx) => {
-      if (cBlock.cleanLen < 15) return;
-
-      let bestBaseIdx = -1;
-      let maxSim = 0;
-
-      baseBlocks.forEach((bBlock, bIdx) => {
-        if (matchedBaseIndices.has(bIdx)) return;
-        if (bBlock.cleanLen < 15) return;
-
-        const sim = this.stringSimilarity(cBlock.text, bBlock.text);
-        if (sim > maxSim) {
-          maxSim = sim;
-          bestBaseIdx = bIdx;
-        }
-      });
-
-      if (maxSim >= 0.65 && bestBaseIdx !== -1) {
-        const baseRatio = bestBaseIdx / (baseBlocks.length || 1);
-        const currRatio = cIdx / (currBlocks.length || 1);
-        const diffIdx = cIdx - bestBaseIdx;
-
-        const isMoved = Math.abs(diffIdx) >= 2 || Math.abs(baseRatio - currRatio) >= 0.12;
-
-        if (isMoved) {
-          matchedBaseIndices.add(bestBaseIdx);
-          const baseBlock = baseBlocks[bestBaseIdx];
-
-          const snippet = baseBlock.text
-            .replace(/[#*`>\-_]/g, "")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 40);
-
-          movedPairs.push({
-            id: `moved-${bestBaseIdx}-${cIdx}`,
-            targetFrom: cBlock.from,
-            targetTo: cBlock.to,
-            targetSectionIndex: cIdx + 1,
-            originalSectionIndex: bestBaseIdx + 1,
-            originalText: baseBlock.text.trim(),
-            cleanSnippet: snippet + (baseBlock.text.length > 40 ? "..." : ""),
-            similarity: maxSim,
-            direction: diffIdx > 0 ? "down" : "up",
-            originAnchorPos: Math.min(currentText.length, Math.max(0, cBlock.from)),
-          });
-        }
-      }
-    });
-
-    return movedPairs;
-  }
+function loadPluginSource(file, globals = {}, load = require) {
+  const { outputFiles } = require("esbuild").buildSync({
+    entryPoints: [path.join(__dirname, "../src", file)],
+    platform: "node",
+    format: "cjs",
+    bundle: true,
+    packages: "external",
+    write: false,
+  });
+  const mod = { exports: {} };
+  new Function("require", "module", "exports", ...Object.keys(globals), outputFiles[0].text)(
+    load, mod, mod.exports, ...Object.values(globals)
+  );
+  return mod.exports;
 }
+
+const { MovedBlockDetector } = loadPluginSource("diff/moved-detector.ts");
 
 // 模拟新版 Scratchpad 引擎
 class ScratchpadParser {
@@ -467,11 +356,112 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   assert("支持快捷分句胶囊栏样式", css.includes(".refactor-clause-chips-bar") && css.includes(".refactor-clause-chip"));
 }
 
-// Test 7: 发布前隐私保护约束
+// Restore again after undo with the exact same DOM widget, as CodeMirror may reuse it.
+{
+  function element(options = {}) {
+    return {
+      children: [],
+      listeners: {},
+      ...options,
+      addClass() {},
+      appendText() {},
+      createSpan(opts) { return this.createEl("span", opts); },
+      createEl(tag, opts) {
+        const child = element({ tag, ...opts });
+        this.children.push(child);
+        return child;
+      },
+      addEventListener(type, listener) { this.listeners[type] = listener; },
+    };
+  }
+  const { EditorState } = require("@codemirror/state");
+  const { refactorLensField, setRefactorDiffEffect } = loadPluginSource("ui/cm-decorations.ts", {
+    createSpan: element,
+  });
+  const doc = "开头\n\n当前位置。\n\n原文也在下面出现。";
+  const deleted = "原文也在下面出现。";
+  const anchor = doc.indexOf("当前位置");
+  let state = EditorState.create({ doc, extensions: [refactorLensField] });
+  state = state.update({
+    effects: setRefactorDiffEffect.of({
+      diffResult: { segments: [{ type: "delete", from: anchor, text: deleted }] },
+      movedPairs: [],
+    }),
+  }).state;
+  const widget = state.field(refactorLensField).iter().value.widget;
+  let last;
+  const view = {
+    get state() { return state; },
+    contentDOM: { contains: () => true },
+    posAtDOM: () => anchor,
+    dispatch(transaction) { last = transaction; state = transaction.state; },
+    focus() {},
+  };
+  const wrapper = widget.toDOM(view);
+  const button = wrapper.children[0].children[1].children[0];
+  const click = () => button.listeners.click({ preventDefault() {}, stopPropagation() {} });
+  click();
+  const firstRestore = last;
+  const restored = doc.slice(0, anchor) + deleted + doc.slice(anchor);
+  click(); // A duplicate click before diff refresh must not insert twice.
+  assert("恢复只写回当前红字锚点，不跳到下方同文", state.doc.toString() === restored &&
+    state.selection.main.head === anchor && !firstRestore.scrollIntoView);
+  state = state.update({ changes: firstRestore.changes.invert(firstRestore.startState.doc) }).state;
+  click(); // Same button; the document change simulates undo's inverse transaction.
+  assert("撤销后复用同一个恢复按钮仍可再次恢复", state.doc.toString() === restored);
+}
+
+{
+  const title = "## 为什么 Git 和 Diff 救不了写作者？";
+  const a = "清晨写下第一段文字，先把思路整理清楚。";
+  const b = "下午重新检查故事结尾，把细节补充完整。";
+  const c = "夜里关上电脑，留一些时间给接下来的思考。";
+  const join = (...blocks) => blocks.join("\n\n");
+  const before = join(a, title, b, c);
+  const after = join(a, b, c, title);
+  const pairs = movedDetector.detect(before, after);
+  assert("搬迁标题仅配对一次，旧位置在原上下文，新位置在文末",
+    pairs.length === 1 && pairs[0].originalText === title &&
+    pairs[0].targetFrom === after.indexOf(title) &&
+    pairs[0].originAnchorPos >= a.length && pairs[0].originAnchorPos <= after.indexOf(b));
+  assert("只在前面插入段落不会误报搬迁",
+    movedDetector.detect(before, join("今天新增一段完全不同的说明。", before)).length === 0);
+  assert("几个零碎字不标记成搬迁",
+    movedDetector.detect(join(a, "短字", b, c), join(a, b, c, "短字")).length === 0);
+  const { EditorState } = require("@codemirror/state");
+  const { movedPairsField, refactorLensField, setRefactorDiffEffect } = loadPluginSource("ui/cm-decorations.ts");
+  const state = EditorState.create({ doc: after, extensions: [movedPairsField, refactorLensField] }).update({
+    effects: setRefactorDiffEffect.of({ diffResult: { segments: [] }, movedPairs: pairs }),
+  }).state;
+  const widgets = [];
+  const cursor = state.field(refactorLensField).iter();
+  while (cursor.value) {
+    widgets.push(cursor.from);
+    cursor.next();
+  }
+  assert("同一个搬迁对在旧位置和新位置分别渲染徽标",
+    pairs.length === 1 && widgets.length === 2 &&
+    widgets[0] === pairs[0].originAnchorPos && widgets[1] === pairs[0].targetFrom);
+}
+
+// Test 7: model routing and privacy boundaries
 {
   const codexSource = fs.readFileSync(path.join(__dirname, "../src/copilot/codex-cli.ts"), "utf-8");
   assert("插件不直接读取 Codex 凭据文件", !codexSource.includes("auth.json"));
-  assert("用户改写提示词不写入临时明文文件", !codexSource.includes("tmpPrompt") && !codexSource.includes("writeFileSync"));
+  let patch;
+  const { CodexCliEngine } = loadPluginSource("copilot/codex-cli.ts", {}, (id) =>
+    id === "fs" ? { writeFileSync: (_, data) => { patch = JSON.parse(data); } } : require(id)
+  );
+  const settings = { rewriteBackend: "deepseek", deepseekCliPath: "", deepseekModel: "route-model", deepseekProvider: "custom",
+    codexCliPath: "", codexModel: "" };
+  const cli = new CodexCliEngine(settings);
+  const argv = cli.deepseekArguments("/tmp/test", settings);
+  assert("Harness 以 stdin 接收稿件，临时配置只覆盖模型和会话日志上传",
+    argv.at(-1) === "-" && argv.includes("read-only") &&
+    patch.length === 2 && patch[0].id === "session-log-deepseek" && patch[0].disabled === true &&
+    JSON.stringify(patch[1].config) === '{"provider":"custom","model":"route-model"}');
+  cli.deepseekArguments("/tmp/test", { ...settings, deepseekModel: "" });
+  assert("Harness 模型留空时保留用户本机模型路由", patch.length === 1);
 }
 
 console.log("\n=== 测试汇总 ===");

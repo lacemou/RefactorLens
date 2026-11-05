@@ -1,4 +1,5 @@
-import { execFile, spawn } from "child_process";
+import { execFile, spawn, type ChildProcessByStdio } from "child_process";
+import type { Readable, Writable } from "stream";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
@@ -10,14 +11,18 @@ export interface CodexRewriteOptions {
 }
 
 export class CodexCliEngine {
-  private customBinaryPath: string = "";
+  constructor(private settings: RewriteCliSettings) {}
 
-  constructor(customBinaryPath: string = "") {
-    this.customBinaryPath = customBinaryPath;
+  public configure(settings: RewriteCliSettings) {
+    this.settings = settings;
   }
 
-  public setCustomBinaryPath(p: string) {
-    this.customBinaryPath = p;
+  public describeModel(): string {
+    const { rewriteBackend, codexModel, deepseekModel, deepseekProvider } = this.settings;
+    if (rewriteBackend === "deepseek") {
+      return `DeepSeek Harness · ${deepseekModel.trim() ? `${deepseekProvider.trim() || "deepseek-official"}/${deepseekModel.trim()}` : "跟随 Harness 配置"}`;
+    }
+    return `Codex CLI · ${codexModel.trim() || "跟随 Codex 配置"}`;
   }
 
   public getEnhancedEnv(): NodeJS.ProcessEnv {
@@ -32,6 +37,7 @@ export class CodexCliEngine {
     const extraPaths = [
       path.join(home, "Library/pnpm/bin"),
       path.join(home, ".local/bin"),
+      path.join(home, ".npm-global/bin"),
       path.join(home, ".nvm/current/bin"),
       "/opt/homebrew/bin",
       "/usr/local/bin",
@@ -47,18 +53,21 @@ export class CodexCliEngine {
     return env;
   }
 
-  public async detectCodexPath(): Promise<{ available: boolean; path: string; version?: string }> {
+  public async detectCli(settings = this.settings): Promise<{ available: boolean; path: string; version?: string }> {
     const isWin = os.platform() === "win32";
     const home = os.homedir();
 
-    const candidates = [
-      this.customBinaryPath,
-      path.join(home, "Library/pnpm/bin/codex"),
-      "/opt/homebrew/bin/codex",
-      "/usr/local/bin/codex",
-      path.join(home, ".local/bin/codex"),
-      isWin ? "codex.cmd" : "codex",
-    ].filter(Boolean);
+    const deepseek = settings.rewriteBackend === "deepseek";
+    const name = deepseek ? "dsh" : "codex";
+    const custom = (deepseek ? settings.deepseekCliPath : settings.codexCliPath).trim();
+    const candidates = custom ? [custom] : [
+      path.join(home, "Library/pnpm/bin", name),
+      path.join(home, ".npm-global/bin", name),
+      `/opt/homebrew/bin/${name}`,
+      `/usr/local/bin/${name}`,
+      path.join(home, ".local/bin", name),
+      isWin ? `${name}.exe` : name,
+    ];
 
     for (const cand of candidates) {
       if (cand && (cand.includes("/") || cand.includes("\\"))) {
@@ -115,24 +124,15 @@ export class CodexCliEngine {
   }
 
   public async rewrite(options: CodexRewriteOptions): Promise<string[]> {
-    const detect = await this.detectCodexPath();
+    const settings = { ...this.settings };
+    const label = this.describeModel();
+    const detect = await this.detectCli(settings);
     const { originalText, instruction, styleContext } = options;
 
     const prompt = this.buildPrompt(originalText, instruction, styleContext);
 
-    if (detect.available) {
-      try {
-        const cliResult = await this.callCodexCli(detect.path, prompt);
-        if (cliResult && cliResult.length > 0) {
-          return cliResult.map((text) => this.cleanOutput(text));
-        }
-      } catch (e) {
-        console.warn("Codex CLI 执行异常，自动启用内置启发式备选引擎:", e);
-      }
-    }
-
-    const fallbacks = this.fallbackHeuristicRewrite(originalText, instruction);
-    return fallbacks.map((text) => this.cleanOutput(text));
+    if (!detect.available) throw new Error(`无法启动 ${label}，请检查安装和程序路径。`);
+    return this.callCli(detect.path, prompt, settings);
   }
 
   private buildPrompt(originalText: string, instruction: string, styleContext?: string): string {
@@ -151,14 +151,15 @@ ${styleContext ? `【参考标杆风味】：\n${styleContext}` : ""}
 直接输出改写后的成稿句子，严禁输出任何多余的序号、标签（如不要带“建议版本”字样）或解释。`;
   }
 
-  private callCodexCli(binPath: string, prompt: string): Promise<string[]> {
+  private callCli(binPath: string, prompt: string, settings: RewriteCliSettings): Promise<string[]> {
     return new Promise((resolve, reject) => {
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "refactor-lens-"));
       const tmpOut = path.join(tmpDir, "output.txt");
       const maxOutputBytes = 4 * 1024 * 1024;
       let stdout = "";
-      let stderr = "";
       let finished = false;
+      const deepseek = settings.rewriteBackend === "deepseek";
+      const label = deepseek ? "DeepSeek Harness" : "Codex CLI";
 
       const cleanup = () => {
         try {
@@ -175,49 +176,60 @@ ${styleContext ? `【参考标杆风味】：\n${styleContext}` : ""}
         reject(new Error(message));
       };
 
-      const child = spawn(binPath, ["exec", "--skip-git-repo-check", "-o", tmpOut, "-"], {
-        env: this.getEnhancedEnv(),
-        windowsHide: true,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      let child: ChildProcessByStdio<Writable, Readable, null>;
+      try {
+        const args = deepseek
+          ? this.deepseekArguments(tmpDir, settings)
+          : ["exec", "--skip-git-repo-check", "--sandbox", "read-only",
+            ...(settings.codexModel.trim() ? ["--model", settings.codexModel.trim()] : []),
+            "-o", tmpOut, "-"];
+        child = spawn(binPath, args, {
+          ...(deepseek ? { cwd: tmpDir } : {}),
+          env: this.getEnhancedEnv(),
+          windowsHide: true,
+          stdio: ["pipe", "pipe", "ignore"],
+        });
+      } catch {
+        finishWithError(`无法准备 ${label} 改写。`);
+        return;
+      }
 
       const timeout = window.setTimeout(() => {
         child.kill();
-        finishWithError("Codex 执行超时");
-      }, 30000);
+        finishWithError(`${label} 执行超时。`);
+      }, deepseek ? 90000 : 30000);
 
-      child.stdout.on("data", (chunk: Buffer) => {
-        if (stdout.length < maxOutputBytes) stdout += chunk.toString("utf-8");
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        if (stdout.length < maxOutputBytes) stdout += chunk;
       });
-      child.stderr.on("data", (chunk: Buffer) => {
-        if (stderr.length < maxOutputBytes) stderr += chunk.toString("utf-8");
-      });
+      child.stdin.on("error", () => { /* The close handler reports an early exit. */ });
       child.on("error", () => {
         window.clearTimeout(timeout);
-        finishWithError("无法启动 Codex CLI");
+        finishWithError(`无法启动 ${label}。`);
       });
       child.on("close", (code) => {
         window.clearTimeout(timeout);
         if (finished) return;
 
-        let raw = "";
+        if (code !== 0) {
+          finishWithError(`${label} 改写失败，请检查终端中的认证、模型和服务配置。`);
+          return;
+        }
+        let raw = deepseek ? stdout.trim() : "";
         try {
-          if (fs.existsSync(tmpOut)) raw = fs.readFileSync(tmpOut, "utf-8").trim();
+          if (!deepseek && fs.existsSync(tmpOut)) raw = fs.readFileSync(tmpOut, "utf-8").trim();
         } catch {
           // A missing or unreadable output file is handled as an empty CLI response below.
         }
 
-        if (!raw && stdout) {
+        if (!deepseek && !raw && stdout) {
           const match = stdout.match(/codex\s*\n([\s\S]+?)(?=\ntokens used|$)/i);
           if (match && match[1]) raw = match[1].trim();
         }
 
-        if (code !== 0 && !raw) {
-          finishWithError("Codex CLI 执行失败");
-          return;
-        }
         if (!raw) {
-          finishWithError("Codex 返回空结果");
+          finishWithError(`${label} 返回空结果。`);
           return;
         }
 
@@ -235,6 +247,20 @@ ${styleContext ? `【参考标杆风味】：\n${styleContext}` : ""}
     });
   }
 
+  private deepseekArguments(tmpDir: string, settings: RewriteCliSettings): string[] {
+    const patch = path.join(tmpDir, "refactor-lens.patch.yml");
+    const model = settings.deepseekModel.trim();
+    // JSON is valid YAML. The overlay contains no prompt or credentials.
+    fs.writeFileSync(patch, JSON.stringify([
+      { id: "session-log-deepseek", disabled: true },
+      ...(model ? [{
+        id: "agent-default-model",
+        config: { provider: settings.deepseekProvider.trim() || "deepseek-official", model },
+      }] : []),
+    ]), { mode: 0o600 });
+    return ["--profile", "headless", "--patch", patch, "--permission-mode", "read-only", "--approval-policy", "never", "-"];
+  }
+
   /**
    * 彻底剥离任何“【建议版本 1】”等前缀污染，保证纯净成稿
    */
@@ -248,44 +274,13 @@ ${styleContext ? `【参考标杆风味】：\n${styleContext}` : ""}
     s = s.replace(/^(?:[0-9]+[.、:：\s]+|[①②③④⑤⑥⑦⑧⑨⑩]|\([0-9]+\)\s*)/g, "");
     return s.trim();
   }
+}
 
-  private fallbackHeuristicRewrite(text: string, instruction: string): string[] {
-    const clean = text.trim();
-
-    if (instruction.includes("去AI味")) {
-      return [
-        clean
-          .replace(/总的来说|综上所述|不难看出|显而易见/g, "")
-          .replace(/为我们提供了|为创作者带来了|有力地证明了/g, "说明了")
-          .replace(/不仅.*?而且.*?/g, "")
-          .trim() || clean,
-        `老实说，${clean.replace(/我们可以发现|值得注意的是/g, "").trim()}`,
-        `说白了，${clean}`,
-      ];
-    } else if (instruction.includes("口语化")) {
-      return [
-        `聊到这儿，我想说句大白话：${clean}`,
-        clean.replace(/，/g, "。").replace(/从而/g, "这样就").replace(/进而/g, "接着"),
-        `其实很简单，${clean}`,
-      ];
-    } else if (instruction.includes("痛点") || instruction.includes("现实")) {
-      return [
-        `现实是残酷的：${clean}`,
-        `很多人卡在这一步不是因为不努力，而是：${clean}`,
-        `普通上班族最真切的困境莫过于：${clean}`,
-      ];
-    } else if (instruction.includes("精炼")) {
-      return [
-        clean.replace(/的|地|得/g, "").replace(/非常|十分|极其|特别/g, ""),
-        clean.split("，")[0] + "。",
-        clean,
-      ];
-    }
-
-    return [
-      clean,
-      `说实话，${clean}`,
-      `从实际落地来看：${clean}`,
-    ];
-  }
+export interface RewriteCliSettings {
+  rewriteBackend: "codex" | "deepseek";
+  codexCliPath: string;
+  codexModel: string;
+  deepseekCliPath: string;
+  deepseekProvider: string;
+  deepseekModel: string;
 }

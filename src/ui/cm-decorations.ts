@@ -1,4 +1,4 @@
-import { RangeSetBuilder, StateField, StateEffect } from "@codemirror/state";
+import { StateField, StateEffect, Transaction, type Text } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import { DocumentDiffResult } from "../diff/comparator";
 import { MovedPair } from "../diff/moved-detector";
@@ -33,28 +33,19 @@ class DeletedUnitWidget extends WidgetType {
 
   toDOM(view: EditorView): HTMLElement {
     const wrapper = createSpan({ cls: "refactor-deleted-widget" });
-    let restoring = false;
+    let restoredDoc: Text | undefined;
 
     const restoreText = () => {
-      if (restoring) return;
-      restoring = true;
-      wrapper.addClass("refactor-deleted-widget-restoring");
-      wrapper.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
-        button.disabled = true;
-      });
-
-      let insertPosition = this.fallbackPosition;
-      try {
-        insertPosition = view.posAtDOM(wrapper, 0);
-      } catch {
-        // DOM 在差异刷新瞬间可能不可用，使用创建构件时的锚点兜底。
-      }
-      insertPosition = Math.min(view.state.doc.length, Math.max(0, insertPosition));
-      view.dispatch({
+      if (restoredDoc === view.state.doc || !view.contentDOM.contains(wrapper)) return;
+      const insertPosition = view.posAtDOM(wrapper);
+      const transaction = view.state.update({
         changes: { from: insertPosition, insert: this.unit.rawText },
-        selection: { anchor: insertPosition + this.unit.rawText.length },
-        scrollIntoView: true,
+        selection: { anchor: insertPosition },
+        annotations: Transaction.userEvent.of("input.restore"),
       });
+      // CodeMirror may reuse this DOM after undo; only guard the document produced by this click.
+      restoredDoc = transaction.newDoc;
+      view.dispatch(transaction);
       view.focus();
     };
 
@@ -86,7 +77,7 @@ class DeletedUnitWidget extends WidgetType {
         text: "↩ 恢复",
         type: "button",
       });
-      restoreButton.title = "只将这句删除内容恢复到原位置";
+      restoreButton.title = "只在这处红字的位置恢复，不跳转";
       restoreButton.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -136,25 +127,47 @@ class DeletedUnitWidget extends WidgetType {
 }
 
 /**
- * 搬迁段落段首交互式徽标 (MovedTargetWidget)
+ * A move has one jump button at each end; the target also offers the original text.
  */
-class MovedTargetWidget extends WidgetType {
-  private pair: MovedPair;
-  private isExpanded: boolean = false;
-
-  constructor(pair: MovedPair) {
+class MovedEndpointWidget extends WidgetType {
+  constructor(private pair: MovedPair, private origin: boolean) {
     super();
-    this.pair = pair;
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const container = createDiv({ cls: "refactor-moved-badge-container" });
+    const container = this.origin
+      ? createSpan({ cls: "refactor-moved-origin" })
+      : createDiv({ cls: "refactor-moved-badge-container" });
+    container.dataset.refactorMove = `${this.pair.id}:${this.origin ? "origin" : "target"}`;
+    const badge = container.createEl("button", {
+      cls: "refactor-moved-badge",
+      type: "button",
+      text: this.origin ? "↗ 跳到新位置" : "↩ 跳到搬迁前的位置",
+    });
+    badge.title = this.pair.cleanSnippet;
+    badge.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!view.contentDOM.contains(container)) return;
+      const side = this.origin ? "target" : "origin";
+      const pair = view.state.field(movedPairsField).find((item) => item.id === this.pair.id);
+      if (!pair) return;
+      const pos = this.origin ? pair.targetFrom : pair.originAnchorPos;
+      view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+      // The counterpart can be outside the viewport until the scroll is applied.
+      view.requestMeasure({
+        read: () => view.contentDOM.querySelector<HTMLButtonElement>(
+          `[data-refactor-move="${pair.id}:${side}"] > button`
+        ),
+        write: (counterpart) => counterpart?.focus({ preventScroll: true }),
+      });
+    });
+    if (this.origin) return container;
 
-    const badge = container.createSpan({ cls: "refactor-moved-badge" });
+    const preview = container.createEl("button", { cls: "refactor-moved-badge", type: "button" });
+    preview.setAttribute("aria-expanded", "false");
     const simPercent = Math.round(this.pair.similarity * 100);
-    badge.appendText(`📦 搬迁段落 · 来自原第 ${this.pair.originalSectionIndex} 节 (${simPercent}% 相似) `);
-    const arrow = badge.createSpan({ cls: "refactor-toggle-arrow", text: "▾" });
-    badge.title = "点击原地展开/收起底稿原文对照";
+    preview.setText(`底稿第 ${this.pair.originalSectionIndex} 段 · ${simPercent}% 相似 ▾`);
 
     const drawer = container.createDiv({ cls: "refactor-moved-drawer refactor-is-hidden" });
     const drawerHeader = drawer.createDiv({ cls: "refactor-drawer-header" });
@@ -165,26 +178,26 @@ class MovedTargetWidget extends WidgetType {
     const closeBtn = drawerHeader.createSpan({ cls: "refactor-drawer-close", text: "收起 ▴" });
     drawer.createDiv({ cls: "refactor-drawer-body", text: this.pair.originalText });
 
-    badge.addEventListener("click", (e) => {
+    preview.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.isExpanded = !this.isExpanded;
-      drawer.toggleClass("refactor-is-hidden", !this.isExpanded);
-      arrow.setText(this.isExpanded ? "▴" : "▾");
+      const expanded = drawer.hasClass("refactor-is-hidden");
+      drawer.toggleClass("refactor-is-hidden", !expanded);
+      preview.setAttribute("aria-expanded", String(expanded));
     });
 
     closeBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.isExpanded = false;
       drawer.addClass("refactor-is-hidden");
-      arrow.setText("▾");
+      preview.setAttribute("aria-expanded", "false");
     });
     return container;
   }
 
-  eq(other: MovedTargetWidget): boolean {
-    return other.pair.id === this.pair.id;
+  eq(other: MovedEndpointWidget): boolean {
+    return this.origin === other.origin && other.pair.id === this.pair.id &&
+      other.pair.originalText === this.pair.originalText && other.pair.similarity === this.pair.similarity;
   }
 
   ignoreEvent(): boolean {
@@ -200,6 +213,20 @@ export interface RefactorDiffPayload {
 }
 
 export const setRefactorDiffEffect = StateEffect.define<RefactorDiffPayload>();
+
+export const movedPairsField = StateField.define<MovedPair[]>({
+  create: () => [],
+  update(pairs, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setRefactorDiffEffect)) return effect.value.movedPairs;
+    }
+    return tr.docChanged ? pairs.map((pair) => ({
+      ...pair,
+      targetFrom: tr.changes.mapPos(pair.targetFrom, 1),
+      originAnchorPos: tr.changes.mapPos(pair.originAnchorPos, -1),
+    })) : pairs;
+  },
+});
 
 interface DecorationItem {
   from: number;
@@ -230,10 +257,15 @@ export const refactorLensField = StateField.define<DecorationSet>({
             from: targetPos,
             to: targetPos,
             deco: Decoration.widget({
-              widget: new MovedTargetWidget(pair),
+              widget: new MovedEndpointWidget(pair, false),
               side: -1,
               block: true,
             }),
+          });
+          items.push({
+            from: pair.originAnchorPos,
+            to: pair.originAnchorPos,
+            deco: Decoration.widget({ widget: new MovedEndpointWidget(pair, true), side: -1 }),
           });
         }
 
@@ -308,23 +340,7 @@ export const refactorLensField = StateField.define<DecorationSet>({
           }
         }
 
-        // 5. 严格升序排序
-        items.sort((a, b) => {
-          if (a.from !== b.from) return a.from - b.from;
-          return a.to - b.to;
-        });
-
-        // 6. 装配进 RangeSetBuilder
-        const builder = new RangeSetBuilder<Decoration>();
-        for (const item of items) {
-          try {
-            builder.add(item.from, item.to, item.deco);
-          } catch (e) {
-            console.warn("RefactorLens RangeSetBuilder 跳过:", item, e);
-          }
-        }
-
-        return builder.finish();
+        return Decoration.set(items.map((item) => item.deco.range(item.from, item.to)), true);
       }
     }
 

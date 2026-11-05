@@ -1,6 +1,6 @@
 # RefactorLens
 
-**A source-clean revision lens and in-place Codex rewriting workspace for Obsidian.**
+**A source-clean revision lens and in-place AI rewriting workspace for Obsidian.**
 
 [中文说明](#中文说明)
 
@@ -23,13 +23,13 @@ RefactorLens is built for writers who keep multiple Markdown drafts and want to 
 
 ### Paragraph move detection
 
-- Detect likely paragraphs that were moved and lightly rewritten.
-- Show their original and current section positions.
-- Navigate between move indicators in the editor.
+- Pair likely moved paragraphs or standalone sentences, including lightly rewritten ones. Short fragments are excluded.
+- Jump between the estimated old position and the new position using the two move buttons. The original-text preview opens separately.
+- Restoring a red deletion inserts only that unit where it is displayed. Undo brings back the restore action.
 
 Move detection is heuristic. Always review its result before treating a paragraph as definitively moved.
 
-### In-place Codex rewriting
+### In-place AI rewriting
 
 - Select text and open the rewrite assistant from Obsidian.
 - Use a custom instruction or quick actions for a more natural, conversational, concise, or pain-point-focused rewrite.
@@ -37,7 +37,7 @@ Move detection is heuristic. Always review its result before treating a paragrap
 - Accept a complete rewrite, merge a selected clause, discard it, or save the old sentence to the scratchpad.
 - Optionally include a short excerpt from a configured style benchmark.
 
-Codex rewriting requires a locally installed and authenticated [OpenAI Codex CLI](https://github.com/openai/codex). RefactorLens reuses the CLI's existing authentication and does not ask for an API key.
+Choose a locally installed [OpenAI Codex CLI](https://github.com/openai/codex) or [DeepSeek Harness CLI](https://github.com/deepseek-ai/deepseek-harness) in the plugin settings. Enter a model ID supported by your account or route, or leave it blank to use the CLI's configuration. For Harness, a model override can also specify a configured provider ID; the default route for an override is `deepseek-official`. The plugin does not ask for API keys. Configure authentication in your chosen CLI; the standard Harness headless profile does not reuse GUI sign-in.
 
 ### Inspiration scratchpad
 
@@ -49,15 +49,14 @@ Codex rewriting requires a locally installed and authenticated [OpenAI Codex CLI
 
 RefactorLens has no telemetry or analytics.
 
-- The plugin does not read or store Codex credential files.
+- The plugin does not read or store CLI credential files.
 - The plugin does not access the system clipboard.
-- Without Codex rewriting, note comparison and scratchpad operations stay inside Obsidian and the local vault.
+- Without AI rewriting, note comparison and scratchpad operations stay inside Obsidian and the local vault.
 - The baseline picker enumerates Markdown file paths in the current vault only when you open it, so it can present files available for comparison.
-- When you request a Codex rewrite, the selected text, your instruction, and up to 500 characters from an optional style benchmark are passed to the local Codex CLI. The CLI may then communicate with OpenAI according to its own configuration and privacy terms.
-- To provide this opt-in desktop feature, the plugin launches the exact Codex CLI executable directly without a shell. That child process inherits the local user's permissions. It runs only after an explicit rewrite request or connection test.
-- Node.js filesystem access is limited to locating the configured Codex executable, managing a private temporary output directory, and reading an optional style benchmark when you explicitly configure an absolute path outside the vault.
-- Rewrite prompts are passed through the child process's standard input rather than saved as plaintext prompt files.
-- Final CLI output uses a private temporary directory and is removed after the request finishes.
+- When you request a rewrite, the selected text, instruction and up to 500 characters from an optional style benchmark go to the selected CLI, which may send them to its configured provider or gateway.
+- The plugin launches the selected executable directly without a shell and requests read-only mode for rewrites.
+- Node.js filesystem access is used for CLI discovery, private temporary files, and an optional style benchmark you explicitly locate outside the vault.
+- The plugin passes the prompt through standard input. It deletes its temporary Codex output or Harness model overlay after the request. Harness may retain sessions in its own local history; the plugin disables Harness's session-log upload extension for its invocations.
 - Scratchpad entries are ordinary Markdown stored in the vault.
 - Plugin settings are stored by Obsidian in the plugin's `data.json`. If you configure absolute local paths, that file can contain those paths; exclude it from untrusted sync or version control when appropriate.
 
@@ -65,7 +64,7 @@ RefactorLens has no telemetry or analytics.
 
 - Obsidian desktop `1.13.0` or later.
 - macOS or Windows. Linux may work but is not yet an officially tested target.
-- Codex CLI is optional and only required for AI rewriting.
+- A configured Codex CLI or DeepSeek Harness CLI is required only for AI rewriting.
 
 ## Installation
 
@@ -136,7 +135,7 @@ Please avoid including private note content, credentials, or personal paths in a
 
 ## 中文说明
 
-**RefactorLens（文案透镜）是一款保持 Markdown 源文件纯净的 Obsidian 文案修订与 Codex 行内改写插件。**
+**RefactorLens（文案透镜）是一款保持 Markdown 源文件纯净的 Obsidian 文案修订与 AI 行内改写插件。**
 
 它面向保留多版 Markdown 稿件的写作者：无需打开程序员式 Diff，也无需向正文写入 CriticMarkup，就能在当前编辑器里查看新增、删除和疑似搬迁的段落。
 
@@ -157,13 +156,13 @@ Please avoid including private note content, credentials, or personal paths in a
 
 ### 段落搬家识别
 
-- 识别疑似被移动并经过轻度改写的段落。
-- 显示原段落位置和当前段落位置。
-- 在编辑器中通过搬迁标记定位相关内容。
+- 识别疑似搬迁的段落或独立句子，允许轻度改写，排除零碎文字。
+- 在推定的原位置和新位置各显示一个徽标，可以双向跳转；原文对照单独展开。
+- 点击红字旁的“恢复”只会在该处写回所选单元；撤销后可以再次恢复。
 
 段落搬家采用启发式算法，结果应由用户复核，不能视为绝对判断。
 
-### Codex 行内改写
+### AI 行内改写
 
 - 选中文字后在 Obsidian 内呼出改写顾问。
 - 输入自定义要求，或使用自然化、口语化、精炼、加深现实痛点等快捷指令。
@@ -171,7 +170,7 @@ Please avoid including private note content, credentials, or personal paths in a
 - 支持整句采纳、融合所选半句、放弃修改，或把旧句存入灵感抽屉。
 - 可选择读取文风标杆文件的一小段内容作为参考。
 
-该功能需要本机已安装并登录 [OpenAI Codex CLI](https://github.com/openai/codex)。插件复用 CLI 已有的登录状态，不要求填写 API Key。
+可在设置中选择本机已安装的 [OpenAI Codex CLI](https://github.com/openai/codex) 或 [DeepSeek Harness CLI](https://github.com/deepseek-ai/deepseek-harness)，并填写账号或网关支持的模型 ID。留空时沿用 CLI 配置。为 Harness 指定模型时可同时填写提供方 ID，留空使用 `deepseek-official`。认证在对应 CLI 中配置；标准 Harness headless 配置不会复用图形界面登录。
 
 ### 灵感暂存抽屉
 
@@ -183,15 +182,14 @@ Please avoid including private note content, credentials, or personal paths in a
 
 RefactorLens 不包含遥测或数据分析。
 
-- 插件不读取、不保存 Codex 凭据文件。
+- 插件不读取、不保存 CLI 凭据文件。
 - 插件不访问系统剪贴板。
-- 不使用 Codex 改写时，文稿比对和灵感暂存只在 Obsidian 与本地 Vault 内进行。
+- 不使用 AI 改写时，文稿比对和灵感暂存只在 Obsidian 与本地 Vault 内进行。
 - 仅当你打开底稿选择器时，插件会枚举当前 Vault 内的 Markdown 文件路径，用于列出可选底稿。
-- 发起 Codex 改写时，选中文字、改写指令，以及可选文风标杆的前 500 个字符会传给本地 Codex CLI；CLI 可能依据自身配置和隐私条款与 OpenAI 通信。
-- 为提供这项主动触发的桌面端功能，插件会直接启动指定的 Codex CLI 可执行文件，不经过 Shell。该子进程继承当前用户权限，仅在你主动发起改写或连接测试时运行。
-- Node.js 文件系统访问仅用于定位 Codex 可执行文件、管理独立临时输出目录，以及在你明确配置 Vault 外绝对路径时读取可选文风标杆。
-- 改写提示词通过子进程标准输入传递，不保存为明文提示词文件。
-- CLI 最终输出使用独立临时目录，并在请求完成后删除。
+- 发起改写时，选中文字、指令和可选文风标杆的前 500 个字符会传给所选 CLI，由它按自身配置发送给模型提供方或网关。
+- 插件直接启动指定的可执行文件，不经过 Shell，并为改写请求只读模式。
+- Node.js 文件系统访问用于查找 CLI、管理独立临时文件，以及读取你明确配置在 Vault 外的可选文风标杆。
+- 插件通过标准输入传递提示词，并在请求结束后删除自己的 Codex 临时输出或 Harness 模型配置。Harness 仍可能保留本地会话历史；插件会在自己的调用中关闭 Harness 的会话日志上传扩展。
 - 灵感抽屉内容以普通 Markdown 文件保存在 Vault 中。
 - 插件设置由 Obsidian 写入插件目录下的 `data.json`。若填写绝对路径，该文件可能包含本地路径；必要时请将其排除在不可信的同步或版本控制之外。
 
@@ -199,7 +197,7 @@ RefactorLens 不包含遥测或数据分析。
 
 - Obsidian 桌面版 `1.13.0` 或更高版本。
 - 正式目标平台为 macOS 和 Windows；Linux 尚未作为正式测试平台。
-- Codex CLI 仅在使用 AI 改写时需要安装。
+- 仅 AI 改写需要安装并配置 Codex CLI 或 DeepSeek Harness CLI。
 
 ## 安装
 

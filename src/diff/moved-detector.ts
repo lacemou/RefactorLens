@@ -1,3 +1,6 @@
+import { CopywritingComparator } from "./comparator";
+import { isScratchpadCandidate } from "../ui/deleted-text-policy";
+
 export interface MovedPair {
   id: string; // 唯一配对 ID
 
@@ -24,15 +27,14 @@ export interface MovedPair {
  * 专为真实创作场景设计：
  * 1. 真实作者在搬迁段落时，往往会伴随改字、换格式（有序变无序）、润色语句等微调；
  * 2. 剥离 Markdown 语法标记与标点后，通过 2-gram 字符切片精确计算段落核心语义重合度；
- * 3. 精准捕获跨段落的大幅度位移（位移 >= 2 节或文档相对位次跨越）；
- * 4. 彻底杜绝误报，确保在真实长文（如 V1 到 V5）中 100% 稳定识别段落搬迁。
+ * 3. 只在匹配段落的相对顺序改变时推断搬迁。
  */
 export class MovedBlockDetector {
   /**
    * 清理 Markdown 标记、标点与多余空白，提取纯正文语义字符
    */
   public cleanText(str: string): string {
-    return str.replace(/[^\p{L}\p{M}]/gu, "");
+    return str.replace(/[^\p{L}\p{M}\p{N}]/gu, "");
   }
 
   /**
@@ -108,64 +110,102 @@ export class MovedBlockDetector {
   /**
    * 检测段落位移并返回精确搬迁对
    */
-  public detect(baselineText: string, currentText: string): MovedPair[] {
+  public detect(
+    baselineText: string,
+    currentText: string,
+    diff = new CopywritingComparator().compare(baselineText, currentText)
+  ): MovedPair[] {
     const baseBlocks = this.splitParagraphs(baselineText);
     const currBlocks = this.splitParagraphs(currentText);
-    const movedPairs: MovedPair[] = [];
-    const matchedBaseIndices = new Set<number>();
+    type Match = { base: number; current: number; score: number };
+    const bestBase = new Map<number, Match | null>();
+    const bestCurrent = new Map<number, Match | null>();
+    const scoresBase = new Map<number, number>();
+    const scoresCurrent = new Map<number, number>();
+    const pick = (matches: Map<number, Match | null>, scores: Map<number, number>, key: number, match: Match) => {
+      const previous = scores.get(key) ?? 0;
+      if (match.score > previous) {
+        scores.set(key, match.score);
+        matches.set(key, match);
+      } else if (match.score === previous) {
+        matches.set(key, null);
+      }
+    };
 
     currBlocks.forEach((cBlock, cIdx) => {
-      if (cBlock.cleanLen < 15) return;
-
-      let bestBaseIdx = -1;
-      let maxSim = 0;
-
+      if (cBlock.cleanLen <= 4) return;
       baseBlocks.forEach((bBlock, bIdx) => {
-        if (matchedBaseIndices.has(bIdx)) return;
-        if (bBlock.cleanLen < 15) return;
-
-        const sim = this.stringSimilarity(cBlock.text, bBlock.text);
-        if (sim > maxSim) {
-          maxSim = sim;
-          bestBaseIdx = bIdx;
-        }
+        if (bBlock.cleanLen <= 4) return;
+        const score = this.stringSimilarity(cBlock.text, bBlock.text);
+        if (score < 0.65) return;
+        const match = { base: bIdx, current: cIdx, score };
+        pick(bestBase, scoresBase, cIdx, match);
+        pick(bestCurrent, scoresCurrent, bIdx, match);
       });
-
-      // 相似度阈值 65%（包容各种修辞改动与格式调整）
-      if (maxSim >= 0.65 && bestBaseIdx !== -1) {
-        const baseRatio = bestBaseIdx / (baseBlocks.length || 1);
-        const currRatio = cIdx / (currBlocks.length || 1);
-        const diffIdx = cIdx - bestBaseIdx;
-
-        // 判定条件：跨越至少 2 个段落，或者整体相对位置位移超过 12%
-        const isMoved = Math.abs(diffIdx) >= 2 || Math.abs(baseRatio - currRatio) >= 0.12;
-
-        if (isMoved) {
-          matchedBaseIndices.add(bestBaseIdx);
-          const baseBlock = baseBlocks[bestBaseIdx];
-
-          const snippet = baseBlock.text
-            .replace(/[#*`>\-_]/g, "")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 40);
-
-          movedPairs.push({
-            id: `moved-${bestBaseIdx}-${cIdx}`,
-            targetFrom: cBlock.from,
-            targetTo: cBlock.to,
-            targetSectionIndex: cIdx + 1,
-            originalSectionIndex: bestBaseIdx + 1,
-            originalText: baseBlock.text.trim(),
-            cleanSnippet: snippet + (baseBlock.text.length > 40 ? "..." : ""),
-            similarity: maxSim,
-            direction: diffIdx > 0 ? "down" : "up",
-            originAnchorPos: Math.min(currentText.length, Math.max(0, cBlock.from)),
-          });
-        }
-      }
     });
 
-    return movedPairs;
+    let baselineOffset = 0;
+    const deletions = diff.segments.flatMap((segment) => {
+      const start = baselineOffset;
+      if (segment.type !== "insert") baselineOffset += segment.text.length;
+      return segment.type === "delete" ? [{ start, end: baselineOffset, pos: segment.from ?? 0 }] : [];
+    });
+    const matches = [...bestBase.values()].filter((match): match is Match =>
+      !!match && bestCurrent.get(match.base) === match
+    );
+    const anchors = matches.map(({ base }) => {
+      const block = baseBlocks[base];
+      let best: { length: number; pos: number } | undefined;
+      for (const deletion of deletions) {
+        const length = Math.min(deletion.end, block.to) - Math.max(deletion.start, block.from);
+        if (length > (best?.length ?? 0)) best = { length, pos: deletion.pos };
+      }
+      return best && best.length * 2 >= block.text.length ? best.pos : undefined;
+    });
+
+    // Keep the largest set of matches that remain in order. Prefer matches
+    // without a deletion anchor when more than one ordering explains the edit.
+    const chain = matches.map((_, index) => ({ length: 1, stable: Number(anchors[index] === undefined), prev: -1 }));
+    const better = (a: { length: number; stable: number }, b: { length: number; stable: number }) =>
+      a.length > b.length || (a.length === b.length && a.stable > b.stable);
+    let end = -1;
+    for (let i = 0; i < matches.length; i++) {
+      for (let j = 0; j < i; j++) {
+        if (matches[j].base >= matches[i].base) continue;
+        const candidate = { length: chain[j].length + 1, stable: chain[j].stable + Number(anchors[i] === undefined), prev: j };
+        if (better(candidate, chain[i])) chain[i] = candidate;
+      }
+      if (end === -1 || better(chain[i], chain[end])) end = i;
+    }
+    const stable = new Set<number>();
+    for (; end !== -1; end = chain[end].prev) stable.add(end);
+    const neighbours = [...stable].map((i) => matches[i]).sort((a, b) => a.base - b.base);
+
+    return matches.flatMap(({ base, current, score }, index) => {
+      const source = baseBlocks[base];
+      const target = currBlocks[current];
+      if (stable.has(index) || !isScratchpadCandidate(source.text)) return [];
+      const next = neighbours.find((match) => match.base > base);
+      const previous = neighbours.filter((match) => match.base < base).pop();
+      const left = previous ? currBlocks[previous.current].to : 0;
+      const right = next ? currBlocks[next.current].from : currentText.length;
+      const deletedAt = anchors[index];
+      const origin = deletedAt !== undefined && deletedAt >= left && deletedAt <= right
+        ? deletedAt : next ? right : left;
+      if (origin >= target.from && origin <= target.to) return [];
+
+      return [{
+        id: `moved-${base}-${current}`,
+        targetFrom: target.from,
+        targetTo: target.to,
+        targetSectionIndex: current + 1,
+        originalSectionIndex: base + 1,
+        originalText: source.text.trim(),
+        cleanSnippet: source.text.trim().slice(0, 40),
+        similarity: score,
+        direction: target.from > origin ? "down" as const : "up" as const,
+        originAnchorPos: origin,
+      }];
+    });
   }
 }
