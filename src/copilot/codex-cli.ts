@@ -4,6 +4,9 @@ import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
 
+type CliDetection = { available: true; path: string; version: string } |
+  { available: false; path: string; reason: "missing" | "directory" | "dependency" | "launch" };
+
 export interface CodexRewriteOptions {
   originalText: string;
   instruction: string;
@@ -53,7 +56,7 @@ export class CodexCliEngine {
     return env;
   }
 
-  public async detectCli(settings = this.settings): Promise<{ available: boolean; path: string; version?: string }> {
+  public async detectCli(settings = this.settings): Promise<CliDetection> {
     const isWin = os.platform() === "win32";
     const home = os.homedir();
 
@@ -69,18 +72,38 @@ export class CodexCliEngine {
       isWin ? `${name}.exe` : name,
     ];
 
+    let failure: CliDetection = { available: false, path: custom, reason: "missing" };
     for (const cand of candidates) {
-      if (cand && (cand.includes("/") || cand.includes("\\"))) {
-        if (!fs.existsSync(cand)) continue;
+      if (path.isAbsolute(cand)) {
+        let stat: fs.Stats | undefined;
+        try {
+          stat = fs.statSync(cand, { throwIfNoEntry: false });
+        } catch {
+          if (custom) return { available: false, path: cand, reason: "launch" };
+          continue;
+        }
+        if (!stat) continue;
+        if (stat.isDirectory()) {
+          if (custom) return { available: false, path: cand, reason: "directory" };
+          continue;
+        }
       }
 
-      const ver = await this.checkExecutable(cand);
-      if (ver) {
-        return { available: true, path: cand, version: ver };
-      }
+      const result = await this.checkExecutable(cand);
+      if (result.available === true) return result;
+      if (result.reason !== "missing" && failure.reason === "missing") failure = result;
     }
 
-    return { available: false, path: "" };
+    return failure;
+  }
+
+  public describeCliFailure(result: Extract<CliDetection, { available: false }>): string {
+    switch (result.reason) {
+      case "directory": return "这里需要 CLI 可执行文件的绝对路径，不能填写安装目录。";
+      case "dependency": return "已找到 CLI，但启动时缺少依赖。请先修复安装，并在终端运行 --version 确认。";
+      case "launch": return "已找到 CLI，但无法启动。请在终端运行 --version 检查程序和 Node.js。";
+      case "missing": return "找不到 CLI 可执行文件，请检查安装或填写程序的绝对路径。";
+    }
   }
 
   public async checkLoginStatus(bin: string): Promise<string> {
@@ -106,17 +129,33 @@ export class CodexCliEngine {
     });
   }
 
-  private checkExecutable(bin: string): Promise<string | null> {
+  public async checkHarnessHeadless(bin: string): Promise<"ready" | "outdated" | "unavailable"> {
+    return new Promise((resolve) => {
+      execFile(bin, ["--profile", "headless", "--help"], {
+        timeout: 8000, env: this.getEnhancedEnv(), windowsHide: true,
+      }, (error, stdout) => {
+        if (error) resolve("unavailable");
+        else resolve(stdout.includes("--permission-mode") && stdout.includes("--approval-policy") ? "ready" : "outdated");
+      });
+    });
+  }
+
+  private checkExecutable(bin: string): Promise<CliDetection> {
     return new Promise((resolve) => {
       execFile(
         bin,
         ["--version"],
         { timeout: 4000, env: this.getEnhancedEnv(), windowsHide: true },
-        (error, stdout) => {
+        (error, stdout, stderr) => {
           if (!error && stdout) {
-            resolve(stdout.trim());
+            resolve({ available: true, path: bin, version: stdout.trim() });
           } else {
-            resolve(null);
+            resolve({
+              available: false,
+              path: bin,
+              reason: error?.code === "ENOENT" ? "missing" :
+                /MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND|Cannot find module/.test(stderr) ? "dependency" : "launch",
+            });
           }
         }
       );
@@ -131,7 +170,7 @@ export class CodexCliEngine {
 
     const prompt = this.buildPrompt(originalText, instruction, styleContext);
 
-    if (!detect.available) throw new Error(`无法启动 ${label}，请检查安装和程序路径。`);
+    if (detect.available === false) throw new Error(`${label}：${this.describeCliFailure(detect)}`);
     return this.callCli(detect.path, prompt, settings);
   }
 

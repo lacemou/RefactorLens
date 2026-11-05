@@ -374,20 +374,29 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
       addEventListener(type, listener) { this.listeners[type] = listener; },
     };
   }
-  const { EditorState } = require("@codemirror/state");
-  const { refactorLensField, setRefactorDiffEffect } = loadPluginSource("ui/cm-decorations.ts", {
+  const { EditorState, Transaction } = require("@codemirror/state");
+  const { refactorLensField, restoredUnitsField, setRefactorDiffEffect } = loadPluginSource("ui/cm-decorations.ts", {
     createSpan: element,
   });
   const doc = "开头\n\n当前位置。\n\n原文也在下面出现。";
   const deleted = "原文也在下面出现。";
   const anchor = doc.indexOf("当前位置");
-  let state = EditorState.create({ doc, extensions: [refactorLensField] });
-  state = state.update({
+  const adjacent = "旁边这一句仍然没有恢复。";
+  const sources = { key: "synthetic-draft", baseline: deleted + adjacent, live: deleted + adjacent };
+  let state = EditorState.create({ doc, extensions: [restoredUnitsField, refactorLensField] });
+  const refresh = () => {
+    // Simulate the global diff still calling both sentences deleted, including in both layers.
+    const diff = { segments: [{ type: "delete", from: anchor, text: sources.baseline }] };
+    state = state.update({
     effects: setRefactorDiffEffect.of({
-      diffResult: { segments: [{ type: "delete", from: anchor, text: deleted }] },
+      diffResult: diff,
+      liveDiff: diff,
       movedPairs: [],
+      sources,
     }),
-  }).state;
+    }).state;
+  };
+  refresh();
   const widget = state.field(refactorLensField).iter().value.widget;
   let last;
   const view = {
@@ -403,10 +412,24 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   click();
   const firstRestore = last;
   const restored = doc.slice(0, anchor) + deleted + doc.slice(anchor);
+  assert("恢复时立即移除该单元，保留旁边未恢复的红字",
+    state.field(refactorLensField).size === 1);
+  refresh();
+  assert("全局差异重新对齐后，不重新显示已恢复的红字",
+    state.field(refactorLensField).size === 1);
   click(); // A duplicate click before diff refresh must not insert twice.
   assert("恢复只写回当前红字锚点，不跳到下方同文", state.doc.toString() === restored &&
     state.selection.main.head === anchor && !firstRestore.scrollIntoView);
-  state = state.update({ changes: firstRestore.changes.invert(firstRestore.startState.doc) }).state;
+  state = state.update({ changes: firstRestore.changes.invert(firstRestore.startState.doc),
+    annotations: Transaction.userEvent.of("undo") }).state;
+  refresh();
+  assert("撤销后恢复删除标记", state.field(refactorLensField).size === 2);
+  state = state.update({ changes: firstRestore.changes, annotations: Transaction.userEvent.of("redo") }).state;
+  refresh();
+  assert("重做后已恢复的红字仍保持隐藏", state.field(refactorLensField).size === 1);
+  state = state.update({ changes: firstRestore.changes.invert(firstRestore.startState.doc),
+    annotations: Transaction.userEvent.of("undo") }).state;
+  refresh();
   click(); // Same button; the document change simulates undo's inverse transaction.
   assert("撤销后复用同一个恢复按钮仍可再次恢复", state.doc.toString() === restored);
 }

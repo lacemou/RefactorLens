@@ -9,6 +9,48 @@ import {
   splitDeletedTextUnits,
 } from "./deleted-text-policy";
 
+type SourceSpan = { live: boolean; from: number; to: number };
+type RestoreRecord = { spans: SourceSpan[]; from: number; to: number; text: string };
+type DiffSources = { key: string; baseline: string; live?: string };
+const restoreEffect = StateEffect.define<RestoreRecord>();
+export const resetRestores = StateEffect.define<null>();
+
+export const restoredUnitsField = StateField.define<{ sources?: DiffSources; records: RestoreRecord[] }>({
+  create: () => ({ records: [] }),
+  update(value, tr) {
+    let { sources, records } = value;
+    if (tr.docChanged && records.length) {
+      records = records.flatMap((record) => {
+        const dormant = record.from === record.to;
+        const from = tr.changes.mapPos(record.from, dormant ? -1 : 1);
+        const to = tr.changes.mapPos(record.to, dormant ? 1 : -1);
+        if ((!dormant || tr.isUserEvent("redo")) && to > from &&
+            tr.newDoc.sliceString(from, to) === record.text) return [{ ...record, from, to }];
+        if ((tr.isUserEvent("undo") && from === to) || (dormant && from === to)) {
+          return [{ ...record, from, to: from }];
+        }
+        return [];
+      });
+    }
+    for (const effect of tr.effects) {
+      if (effect.is(restoreEffect)) {
+        records = records.filter((record) => record.from !== record.to);
+        records.push(effect.value);
+      } else if (effect.is(resetRestores)) {
+        records = [];
+        sources = undefined;
+      } else if (effect.is(setRefactorDiffEffect)) {
+        const next = effect.value.sources;
+        if (sources?.key !== next?.key || sources?.baseline !== next?.baseline || sources?.live !== next?.live) records = [];
+        sources = next;
+      }
+    }
+    return { sources, records };
+  },
+});
+
+const sameSpan = (a: SourceSpan, b: SourceSpan) => a.live === b.live && a.from === b.from && a.to === b.to;
+
 type SaveTextCallback = (text: string) => Promise<void> | void;
 let globalSaveCallback: SaveTextCallback | null = null;
 
@@ -24,11 +66,11 @@ class DeletedUnitWidget extends WidgetType {
   private isLive: boolean;
   private fallbackPosition: number;
 
-  constructor(unit: DeletedTextUnit, fallbackPosition: number, isLive: boolean = false) {
+  constructor(unit: DeletedTextUnit, fallbackPosition: number, readonly sources: SourceSpan[]) {
     super();
     this.unit = unit;
     this.fallbackPosition = fallbackPosition;
-    this.isLive = isLive;
+    this.isLive = sources[0].live;
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -41,6 +83,12 @@ class DeletedUnitWidget extends WidgetType {
       const transaction = view.state.update({
         changes: { from: insertPosition, insert: this.unit.rawText },
         selection: { anchor: insertPosition },
+        effects: restoreEffect.of({
+          spans: this.sources,
+          from: insertPosition,
+          to: insertPosition + this.unit.rawText.length,
+          text: this.unit.rawText,
+        }),
         annotations: Transaction.userEvent.of("input.restore"),
       });
       // CodeMirror may reuse this DOM after undo; only guard the document produced by this click.
@@ -117,6 +165,8 @@ class DeletedUnitWidget extends WidgetType {
     return (
       other.unit.rawText === this.unit.rawText &&
       other.isLive === this.isLive &&
+      other.sources.length === this.sources.length &&
+      this.sources.every((source, index) => sameSpan(source, other.sources[index])) &&
       other.fallbackPosition === this.fallbackPosition
     );
   }
@@ -208,11 +258,25 @@ class MovedEndpointWidget extends WidgetType {
 export interface RefactorDiffPayload {
   diffResult: DocumentDiffResult | null;
   movedPairs: MovedPair[];
-  sessionLiveDeletes?: Array<{ text: string; pos: number }>;
-  sessionLiveInserts?: Array<{ from: number; to: number }>;
+  sources?: DiffSources;
+  liveDiff?: DocumentDiffResult;
 }
 
 export const setRefactorDiffEffect = StateEffect.define<RefactorDiffPayload>();
+
+function remainingDeletion(text: string, start: number, spans: SourceSpan[]): { text: string; start: number }[] {
+  const end = start + text.length;
+  let cursor = start;
+  const pieces: { text: string; start: number }[] = [];
+  for (const span of spans) {
+    if (span.to <= cursor) continue;
+    if (span.from >= end) break;
+    if (span.from > cursor) pieces.push({ text: text.slice(cursor - start, span.from - start), start: cursor });
+    cursor = Math.min(end, span.to);
+  }
+  if (cursor < end) pieces.push({ text: text.slice(cursor - start), start: cursor });
+  return pieces;
+}
 
 export const movedPairsField = StateField.define<MovedPair[]>({
   create: () => [],
@@ -241,14 +305,16 @@ export const refactorLensField = StateField.define<DecorationSet>({
   update(decorations, tr) {
     for (const effect of tr.effects) {
       if (effect.is(setRefactorDiffEffect)) {
-        const { diffResult, movedPairs, sessionLiveDeletes, sessionLiveInserts } = effect.value;
+        const { diffResult, movedPairs, liveDiff } = effect.value;
         if (!diffResult) {
           return Decoration.none;
         }
 
         const docLength = tr.newDoc.length;
         const items: DecorationItem[] = [];
-        const renderedDeletionKeys = new Set<string>();
+        const restored = (tr.state.field(restoredUnitsField, false)?.records ?? [])
+          .filter((record) => record.to > record.from).flatMap((record) => record.spans);
+        const deletions = new Map<string, { unit: DeletedTextUnit; pos: number; sources: SourceSpan[] }[]>();
 
         // 1. 挂载段落搬家徽标
         for (const pair of movedPairs) {
@@ -269,81 +335,56 @@ export const refactorLensField = StateField.define<DecorationSet>({
           });
         }
 
-        // 2. 挂载基准差异（新增文字与删除文字）
-        for (const seg of diffResult.segments) {
-          if (seg.type === "insert") {
-            const from = Math.min(docLength, Math.max(0, seg.from || 0));
-            const to = Math.min(docLength, Math.max(0, seg.to || 0));
-            if (from < to) {
-              items.push({
-                from,
-                to,
-                deco: Decoration.mark({
-                  class: "refactor-diff-added",
-                }),
-              });
-            }
-          } else if (seg.type === "delete") {
-            const pos = Math.min(docLength, Math.max(0, seg.from || 0));
-            const cleanText = seg.text.trim();
-            if (cleanText.length === 0) continue;
-
-            renderedDeletionKeys.add(`${pos}\u0000${seg.text}`);
-            for (const unit of splitDeletedTextUnits(seg.text)) {
-              items.push({
-                from: pos,
-                to: pos,
-                deco: Decoration.widget({
-                  widget: new DeletedUnitWidget(unit, pos, false),
-                  side: 1,
-                }),
-              });
-            }
-          }
-        }
-
-        // 3. 挂载现场编辑的删除标记
-        if (sessionLiveDeletes && sessionLiveDeletes.length > 0) {
-          for (const item of sessionLiveDeletes) {
-            const pos = Math.min(docLength, Math.max(0, item.pos));
-            const cleanText = item.text.trim();
-            if (cleanText.length === 0) continue;
-            if (renderedDeletionKeys.has(`${pos}\u0000${item.text}`)) continue;
-
-            for (const unit of splitDeletedTextUnits(item.text)) {
-              items.push({
-                from: pos,
-                to: pos,
-                deco: Decoration.widget({
-                  widget: new DeletedUnitWidget(unit, pos, true),
-                  side: 1,
-                }),
-              });
+        const addDiff = (diff: DocumentDiffResult, live: boolean) => {
+          const covered = restored.filter((span) => span.live === live).sort((a, b) => a.from - b.from);
+          let sourceOffset = 0;
+          for (const seg of diff.segments) {
+            const start = sourceOffset;
+            if (seg.type !== "insert") sourceOffset += seg.text.length;
+            const pos = Math.min(docLength, Math.max(0, seg.from ?? 0));
+            if (seg.type === "insert") {
+              const to = Math.min(docLength, seg.to ?? 0);
+              if (pos < to) items.push({ from: pos, to, deco: Decoration.mark({
+                class: live ? "refactor-live-added" : "refactor-diff-added",
+              }) });
+            } else if (seg.type === "delete") {
+              for (const piece of remainingDeletion(seg.text, start, covered)) {
+                let offset = piece.start;
+                for (const unit of splitDeletedTextUnits(piece.text)) {
+                  const span = { live, from: offset, to: offset + unit.rawText.length };
+                  offset = span.to;
+                  const key = `${pos}\u0000${unit.rawText}`;
+                  const matches = deletions.get(key) ?? [];
+                  const baselineMatch = live && matches.find((item) => !item.sources.some((source) => source.live));
+                  if (baselineMatch) baselineMatch.sources.push(span);
+                  else {
+                    const entry = { unit, pos, sources: [span] };
+                    matches.push(entry);
+                    deletions.set(key, matches);
+                    items.push({ from: pos, to: pos, deco: Decoration.widget({
+                      widget: new DeletedUnitWidget(unit, pos, entry.sources), side: 1,
+                    }) });
+                  }
+                }
+              }
             }
           }
-        }
-
-        // 4. 挂载现场编辑的新增高亮
-        if (sessionLiveInserts && sessionLiveInserts.length > 0) {
-          for (const item of sessionLiveInserts) {
-            const from = Math.min(docLength, Math.max(0, item.from));
-            const to = Math.min(docLength, Math.max(0, item.to));
-            if (from < to) {
-              items.push({
-                from,
-                to,
-                deco: Decoration.mark({
-                  class: "refactor-live-added",
-                }),
-              });
-            }
-          }
-        }
+        };
+        addDiff(diffResult, false);
+        if (liveDiff) addDiff(liveDiff, true);
 
         return Decoration.set(items.map((item) => item.deco.range(item.from, item.to)), true);
       }
     }
 
+    const restore = tr.effects.find((effect) => effect.is(restoreEffect));
+    if (restore) {
+      decorations = decorations.update({ filter: (_from, _to, decoration) => {
+        const widget = (decoration.spec as { widget?: unknown }).widget;
+        return !(widget instanceof DeletedUnitWidget &&
+          widget.sources.some((source) => restore.value.spans.some((span) => sameSpan(source, span))));
+      } });
+    }
     return tr.docChanged ? decorations.map(tr.changes) : decorations;
   },
   provide(field) {

@@ -3,7 +3,7 @@ import { EditorView } from "@codemirror/view";
 import * as fs from "fs";
 import { CopywritingComparator } from "./diff/comparator";
 import { MovedBlockDetector } from "./diff/moved-detector";
-import { movedPairsField, refactorLensField, setRefactorDiffEffect, registerDeletedTextSaveHandler } from "./ui/cm-decorations";
+import { movedPairsField, refactorLensField, resetRestores, restoredUnitsField, setRefactorDiffEffect, registerDeletedTextSaveHandler } from "./ui/cm-decorations";
 import { BaselinePillView } from "./ui/baseline-pill";
 import { RefactorLensSettings, DEFAULT_SETTINGS, RefactorLensSettingTab } from "./settings/settings-tab";
 import { ScratchpadManager } from "./scratchpad/scratchpad-manager";
@@ -37,7 +37,7 @@ export default class RefactorLensPlugin extends Plugin {
     this.codexEngine = new CodexCliEngine(this.settings);
 
     // 1. 注册 CodeMirror 6 修订透镜扩展
-    this.registerEditorExtension([movedPairsField, refactorLensField]);
+    this.registerEditorExtension([movedPairsField, restoredUnitsField, refactorLensField]);
 
     // 2. 注册已删除红字的一键暂存全局回调 (就近保存在当前文稿同级目录)
     registerDeletedTextSaveHandler((deletedText: string) => {
@@ -362,6 +362,9 @@ export default class RefactorLensPlugin extends Plugin {
   public async setBaselineForView(view: MarkdownView, baselineFile: TFile | null) {
     if (!view.file) return;
     const fileKey = view.file.path;
+    if (this.activeBaselines.get(fileKey) !== baselineFile) {
+      this.getCM6View(view)?.dispatch({ effects: resetRestores.of(null) });
+    }
     this.activeBaselines.set(fileKey, baselineFile);
 
     if (baselineFile) {
@@ -394,8 +397,6 @@ export default class RefactorLensPlugin extends Plugin {
         effects: setRefactorDiffEffect.of({
           diffResult: null,
           movedPairs: [],
-          sessionLiveDeletes: [],
-          sessionLiveInserts: [],
         }),
       });
       if (pill) pill.updatePillText(null);
@@ -411,33 +412,16 @@ export default class RefactorLensPlugin extends Plugin {
       const diffResult = this.comparator.compare(baselineText, currentText);
       const movedPairs = this.movedDetector.detect(baselineText, currentText, diffResult);
 
-      const sessionSnapshot = this.sessionSnapshots.get(fileKey);
-      const sessionLiveDeletes: Array<{ text: string; pos: number }> = [];
-      const sessionLiveInserts: Array<{ from: number; to: number }> = [];
-
-      if (sessionSnapshot && sessionSnapshot !== currentText) {
-        const liveDiff = this.comparator.compare(sessionSnapshot, currentText);
-        for (const seg of liveDiff.segments) {
-          if (seg.type === "delete" && seg.text.trim().length > 0) {
-            sessionLiveDeletes.push({
-              text: seg.text,
-              pos: seg.from || 0,
-            });
-          } else if (seg.type === "insert" && seg.from !== undefined && seg.to !== undefined) {
-            sessionLiveInserts.push({
-              from: seg.from,
-              to: seg.to,
-            });
-          }
-        }
-      }
+      const sessionSnapshot = this.sessionSnapshots.get(fileKey)?.replace(/\r\n/g, "\n");
+      const liveDiff = sessionSnapshot !== undefined && sessionSnapshot !== currentText
+        ? this.comparator.compare(sessionSnapshot, currentText) : undefined;
 
       cmView.dispatch({
         effects: setRefactorDiffEffect.of({
           diffResult,
           movedPairs,
-          sessionLiveDeletes,
-          sessionLiveInserts,
+          sources: { key: JSON.stringify([fileKey, baselineFile.path]), baseline: baselineText, live: sessionSnapshot },
+          liveDiff,
         }),
       });
 

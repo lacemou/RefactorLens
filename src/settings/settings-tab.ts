@@ -111,7 +111,7 @@ export class RefactorLensSettingTab extends PluginSettingTab {
           },
           {
             name: "DeepSeek Harness 程序路径",
-            desc: "可留空自动探测 dsh；也可填写其绝对路径。",
+            desc: "可留空自动探测；手动填写时请指向 dsh 可执行文件，不要填安装目录。",
             control: { type: "text", key: "deepseekCliPath", placeholder: "留空自动探测" },
           },
           {
@@ -121,7 +121,7 @@ export class RefactorLensSettingTab extends PluginSettingTab {
           },
           {
             name: "DeepSeek Harness 模型 ID",
-            desc: "填写该路由支持的 ID，例如 deepseek-flash。留空时沿用 Harness 的 headless 配置。",
+            desc: "官方路由的 deepseek-flash 对应 DeepSeek-V4.1-Flash。留空时沿用 Harness 的 headless 配置。",
             control: { type: "text", key: "deepseekModel", placeholder: "跟随 Harness 配置" },
           },
           {
@@ -182,13 +182,20 @@ export class RefactorLensSettingTab extends PluginSettingTab {
     setting.setDesc(`正在检查 ${model}…`);
     const detect = await this.plugin.codexEngine.detectCli(settings);
 
-    if (!detect.available) {
-      setting.setDesc(`无法启动 ${model}。请在终端检查安装，或填写程序绝对路径。`);
+    if (detect.available === false) {
+      setting.setDesc(`${model}：${this.plugin.codexEngine.describeCliFailure(detect)}`);
       return;
     }
 
     if (settings.rewriteBackend === "deepseek") {
-      setting.setDesc(`已检测到 ${model}。请在 Harness 的 headless 环境配置认证；此检查未调用模型。`);
+      const status = await this.plugin.codexEngine.checkHarnessHeadless(detect.path);
+      if (status === "ready") {
+        setting.setDesc(`已检测到 ${model}（${detect.version}），headless 模式就绪。此检查未调用模型。`);
+      } else {
+        setting.setDesc(status === "outdated"
+          ? "Harness 版本过旧，缺少只读运行参数，请升级。"
+          : "CLI 可启动，但 headless 模式未就绪。请在终端运行 dsh --profile headless --help 检查。");
+      }
       return;
     }
     const loginStatus = await this.plugin.codexEngine.checkLoginStatus(detect.path);
