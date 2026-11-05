@@ -86,7 +86,7 @@ Until RefactorLens is available in Community Plugins:
    styles.css
    ```
 
-5. Reload Obsidian and enable **RefactorLens (文案透镜)** under **Settings → Community plugins**.
+5. Reload Obsidian and enable **Refactor Lens** under **Settings → Community plugins**.
 
 ## Getting started
 
@@ -202,7 +202,7 @@ RefactorLens 不包含遥测或数据分析。
    styles.css
    ```
 
-5. 重新加载 Obsidian，在 **设置 → 第三方插件** 中启用 **RefactorLens（文案透镜）**。
+5. 重新加载 Obsidian，在 **设置 → 第三方插件** 中启用 **Refactor Lens**。
 
 ## 开始使用
 

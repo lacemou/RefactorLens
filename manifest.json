@@ -1,10 +1,10 @@
 {
   "id": "refactor-lens",
-  "name": "RefactorLens (文案透镜)",
+  "name": "Refactor Lens",
   "version": "0.1.0",
   "minAppVersion": "1.4.0",
-  "description": "面向文字工作者的 Word 式文案修订透镜与 Codex 行内改写工作台。支持双版本比对、删除线新增高亮、段落搬家与灵感暂存。",
-  "author": "YJ & AI不会累",
+  "description": "Review Markdown revisions with inline diffs, moved-paragraph detection, a scratchpad, and in-place Codex rewriting.",
+  "author": "YJ",
   "authorUrl": "https://github.com/lacemou",
   "isDesktopOnly": true
 }
