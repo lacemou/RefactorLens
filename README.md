@@ -17,7 +17,8 @@ RefactorLens is built for writers who keep multiple Markdown drafts and want to 
 - See added text, deleted text, and the overall rewrite ratio in the active editor.
 - Keep deleted text inline instead of interrupting the draft with block cards or multi-select controls.
 - Large deletions are split into sentence- or line-level units, so each useful unit can be restored or saved independently.
-- Tiny deletions stay visually quiet: they show no action buttons and can be restored with a right-click. A scratchpad action appears only for reusable sentence-length content.
+- Select red text to show **Restore** and **Save inspiration**. Restore inserts only the selection where it is shown, keeping neighboring deletions available. Right-click a deletion to restore its entire unit.
+- If the original context can be located uniquely in the current note, the context menu also offers **Restore to original location**. It leaves the page in place and adds session-only links between the two locations.
 - Keep all comparison marks in CodeMirror decorations; the baseline lens does not write diff syntax into the note.
 - Continue editing while the comparison refreshes.
 
@@ -41,7 +42,7 @@ Choose a locally installed [OpenAI Codex CLI](https://github.com/openai/codex) o
 
 ### Inspiration scratchpad
 
-- Save selected text or sentence-length removed passages without losing them. Tiny deletions are intentionally excluded.
+- Save selected text, including explicitly selected deletions, without losing it.
 - Store scratchpad content beside the current note or in one vault-level `_scratchpad.md` file.
 - Browse saved passages in a sidebar and insert them back into a note.
 
@@ -149,8 +150,8 @@ Please avoid including private note content, credentials, or personal paths in a
 - 通过文档顶部的小药丸快速切换底稿。
 - 在当前编辑器内查看新增、删除文字和整体重构率。
 - 删除内容保持为轻量行内痕迹，不再用块级卡片或复选框切断正文。
-- 大段删除内容会继续按句子或独立行拆分，每个有价值的单元都能分别恢复或存入灵感抽屉。
-- 零碎删字不显示操作按钮，右键即可原位恢复；只有达到可独立复用的一句话时，才显示“存灵感”入口。
+- 红字旁没有常驻按钮。划选任意红字后出现「恢复」和「存灵感」；恢复只写回所选部分，相邻红字继续显示。右键可恢复整个句子或片段。
+- 只有能在当前稿唯一定位原上下文时，右键才提供「恢复到原出处」。页面留在操作处，两端显示仅本次会话有效的跳转标签。
 - 差异标记只存在于 CodeMirror 显示层，不向源文件写入 Diff 语法。
 - 编辑正文时实时刷新比对结果。
 
@@ -158,7 +159,7 @@ Please avoid including private note content, credentials, or personal paths in a
 
 - 识别疑似搬迁的段落或独立句子，允许轻度改写，排除零碎文字。
 - 在推定的原位置和新位置各显示一个徽标，可以双向跳转；原文对照单独展开。
-- 点击红字旁的“恢复”只会在该处写回所选单元；撤销后可以再次恢复。
+- 原地恢复与搬迁跳转独立；撤销后可以再次恢复。
 
 段落搬家采用启发式算法，结果应由用户复核，不能视为绝对判断。
 
@@ -174,7 +175,7 @@ Please avoid including private note content, credentials, or personal paths in a
 
 ### 灵感暂存抽屉
 
-- 暂存选中文字或达到一句话长度、仍有复用价值的删除内容；零碎删字不会进入灵感抽屉。
+- 暂存主动选中的正文或删除文字。
 - 可跟随当前文稿保存，也可集中存入 Vault 根目录下的 `_scratchpad.md`。
 - 在侧边栏浏览素材并重新插回正文。
 

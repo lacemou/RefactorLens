@@ -3,7 +3,7 @@ import { EditorView } from "@codemirror/view";
 import * as fs from "fs";
 import { CopywritingComparator } from "./diff/comparator";
 import { MovedBlockDetector } from "./diff/moved-detector";
-import { movedPairsField, refactorLensField, resetRestores, restoredUnitsField, setRefactorDiffEffect, registerDeletedTextSaveHandler } from "./ui/cm-decorations";
+import { movedPairsField, refactorLensField, resetRestores, restoredUnitsField, restoreViewport, setRefactorDiffEffect } from "./ui/cm-decorations";
 import { BaselinePillView } from "./ui/baseline-pill";
 import { RefactorLensSettings, DEFAULT_SETTINGS, RefactorLensSettingTab } from "./settings/settings-tab";
 import { ScratchpadManager } from "./scratchpad/scratchpad-manager";
@@ -37,12 +37,7 @@ export default class RefactorLensPlugin extends Plugin {
     this.codexEngine = new CodexCliEngine(this.settings);
 
     // 1. 注册 CodeMirror 6 修订透镜扩展
-    this.registerEditorExtension([movedPairsField, restoredUnitsField, refactorLensField]);
-
-    // 2. 注册已删除红字的一键暂存全局回调 (就近保存在当前文稿同级目录)
-    registerDeletedTextSaveHandler((deletedText: string) => {
-      return this.saveDeletedText(deletedText);
-    });
+    this.registerEditorExtension([movedPairsField, restoredUnitsField, refactorLensField, restoreViewport]);
 
     // 3. 注册灵感暂存抽屉侧边栏视图
     this.registerView(
@@ -199,13 +194,6 @@ export default class RefactorLensPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
-  }
-
-  private async saveDeletedText(deletedText: string): Promise<void> {
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    const fileName = activeView?.file?.basename || "已删除文字";
-    await this.scratchpadManager.addItem(deletedText, fileName, activeView?.file?.path);
-    new Notice("📦 已成功将删除文字暂存至当前文章的灵感抽屉！");
   }
 
   private async saveSelection(selection: string, view: MarkdownView): Promise<void> {

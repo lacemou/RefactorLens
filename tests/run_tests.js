@@ -44,7 +44,7 @@ class CopywritingComparator {
   }
 }
 
-function loadPluginSource(file, globals = {}, load = require) {
+function loadPluginSource(file, globals = {}, load = (id) => id === "obsidian" ? {} : require(id)) {
   const { outputFiles } = require("esbuild").buildSync({
     entryPoints: [path.join(__dirname, "../src", file)],
     platform: "node",
@@ -181,14 +181,10 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
       !css.includes(".refactor-para-checkbox") &&
       !decorationSource.includes("DeletedBlockCardWidget")
   );
-  assert(
-    "句子级删除痕迹提供轻量行内恢复，零碎删字支持右键恢复",
-    css.includes(".refactor-deleted-inline-actions") &&
-      decorationSource.includes("refactor-deleted-restore-btn") &&
-      decorationSource.includes('addEventListener("contextmenu"') &&
-      decorationSource.includes("changes: { from: insertPosition, insert: this.unit.rawText }")
-  );
   const floatingSource = fs.readFileSync(path.join(__dirname, "../src/ui/floating-copilot.ts"), "utf-8");
+  assert("红字旁无常驻按钮，选区提供恢复和存灵感",
+    !css.includes(".refactor-deleted-inline-actions") &&
+    floatingSource.includes("deleted.restore()") && floatingSource.includes("deleted.text"));
   assert(
     "弹窗打开时由状态管理器移除选区气泡，且不使用高开销 :has 选择器",
     css.includes(".refactor-is-hidden") &&
@@ -214,14 +210,13 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
     return text.replace(/[\s\p{P}\p{S}]/gu, "").length <= 4;
   }
 
-  assert("删除 1～4 个字不出现灵感暂存入口", !isScratchpadCandidate("删掉四字"));
-  assert("删除 1～4 个字被识别为仅右键恢复的零碎删字", isTinyDeletedFragment("删掉四字"));
+  assert("未主动划选的短片段不符合旧的整句推荐门槛", !isScratchpadCandidate("删掉四字"));
+  assert("删除 1～4 个字被识别为零碎删字", isTinyDeletedFragment("删掉四字"));
   assert("有完整句意与句末标点的删除内容可以暂存", isScratchpadCandidate("这句话值得留下。"));
   assert("足够长但没有句末标点的独立表达可以暂存", isScratchpadCandidate("这是一段足够完整并且可以复用的表达"));
   assert("不足一句的短语不进入灵感抽屉", !isScratchpadCandidate("短小片段"));
 
   const policySource = fs.readFileSync(path.join(__dirname, "../src/ui/deleted-text-policy.ts"), "utf-8");
-  const decorationSource = fs.readFileSync(path.join(__dirname, "../src/ui/cm-decorations.ts"), "utf-8");
   const compiledPolicy = ts.transpileModule(policySource, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
@@ -234,8 +229,7 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
     units.length === 4 &&
       units.map((unit) => unit.rawText).join("") === deletedSample &&
       units[0].displayText === "第一句单独恢复。" &&
-      !units[0].rawText.includes("第二句") &&
-      decorationSource.includes("new DeletedUnitWidget(unit, pos")
+      !units[0].rawText.includes("第二句")
   );
 
   const scratchpadViewSource = fs.readFileSync(path.join(__dirname, "../src/scratchpad/scratchpad-view.ts"), "utf-8");
@@ -358,26 +352,8 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
 
 // Restore again after undo with the exact same DOM widget, as CodeMirror may reuse it.
 {
-  function element(options = {}) {
-    return {
-      children: [],
-      listeners: {},
-      ...options,
-      addClass() {},
-      appendText() {},
-      createSpan(opts) { return this.createEl("span", opts); },
-      createEl(tag, opts) {
-        const child = element({ tag, ...opts });
-        this.children.push(child);
-        return child;
-      },
-      addEventListener(type, listener) { this.listeners[type] = listener; },
-    };
-  }
   const { EditorState, Transaction } = require("@codemirror/state");
-  const { refactorLensField, restoredUnitsField, setRefactorDiffEffect } = loadPluginSource("ui/cm-decorations.ts", {
-    createSpan: element,
-  });
+  const { refactorLensField, restoredUnitsField, setRefactorDiffEffect, restoreDeleted } = loadPluginSource("ui/cm-decorations.ts");
   const doc = "开头\n\n当前位置。\n\n原文也在下面出现。";
   const deleted = "原文也在下面出现。";
   const anchor = doc.indexOf("当前位置");
@@ -402,13 +378,11 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   const view = {
     get state() { return state; },
     contentDOM: { contains: () => true },
-    posAtDOM: () => anchor,
-    dispatch(transaction) { last = transaction; state = transaction.state; },
+    dispatch(spec) { last = state.update(spec); state = last.state; },
     focus() {},
   };
-  const wrapper = widget.toDOM(view);
-  const button = wrapper.children[0].children[1].children[0];
-  const click = () => button.listeners.click({ preventDefault() {}, stopPropagation() {} });
+  const element = { getBoundingClientRect: () => ({ top: 160 }) };
+  const click = () => restoreDeleted(view, [{ widget, from: 0, to: deleted.length }], element);
   click();
   const firstRestore = last;
   const restored = doc.slice(0, anchor) + deleted + doc.slice(anchor);
@@ -419,7 +393,8 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
     state.field(refactorLensField).size === 1);
   click(); // A duplicate click before diff refresh must not insert twice.
   assert("恢复只写回当前红字锚点，不跳到下方同文", state.doc.toString() === restored &&
-    state.selection.main.head === anchor && !firstRestore.scrollIntoView);
+    state.selection.main.head === anchor + deleted.length && !firstRestore.scrollIntoView &&
+    state.field(refactorLensField).iter().from === anchor + deleted.length);
   state = state.update({ changes: firstRestore.changes.invert(firstRestore.startState.doc),
     annotations: Transaction.userEvent.of("undo") }).state;
   refresh();
@@ -432,6 +407,61 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   refresh();
   click(); // Same button; the document change simulates undo's inverse transaction.
   assert("撤销后复用同一个恢复按钮仍可再次恢复", state.doc.toString() === restored);
+
+  // Restore the middle of a three-sentence virtual block and preserve both neighbors,
+  // even when the next global comparison temporarily omits them altogether.
+  const three = "第一句还未恢复。第二句选择恢复。第三句还未恢复。";
+  const setDiff = (segments) => {
+    state = state.update({ effects: setRefactorDiffEffect.of({
+      diffResult: { segments }, movedPairs: [], sources: { key: "three", baseline: three },
+    }) }).state;
+  };
+  state = EditorState.create({ doc, extensions: [restoredUnitsField, refactorLensField] });
+  setDiff([{ type: "delete", text: three, from: anchor }]);
+  const middle = state.field(refactorLensField).iter();
+  middle.next();
+  restoreDeleted(view, [{ widget: middle.value.widget, from: 2, to: 5 }], element);
+  setDiff([]);
+  const pending = [];
+  for (const cur = state.field(refactorLensField).iter(); cur.value; cur.next()) {
+    pending.push([cur.from, cur.value.widget.unit.rawText]);
+  }
+  assert("部分恢复第二句时，前后两句和所选句的剩余内容仍在各自位置",
+    JSON.stringify(pending) === JSON.stringify([
+      [anchor, "第一句还未恢复。"], [anchor, "第二"],
+      [anchor + 3, "恢复。"], [anchor + 3, "第三句还未恢复。"],
+    ]) && state.doc.sliceString(anchor, anchor + 3) === "句选择");
+
+  const left = "左侧锚点是另一段中连续且独特的测试文字。";
+  const right = "右侧锚点同样只在正文中出现这一次。";
+  const remoteText = "这句话被恢复到经过验证的远端。";
+  const prefix = "这里是触发位置。\n\n";
+  const remoteDoc = prefix + left + right;
+  const destination = prefix.length + left.length;
+  state = EditorState.create({ doc: remoteDoc, extensions: [restoredUnitsField, refactorLensField] });
+  state = state.update({ effects: setRefactorDiffEffect.of({
+    diffResult: { segments: [
+      { type: "equal", text: left }, { type: "delete", text: remoteText, from: 0 }, { type: "equal", text: right },
+    ] },
+    movedPairs: [], sources: { key: "remote", baseline: left + remoteText + right },
+  }) }).state;
+  const remoteWidget = state.field(refactorLensField).iter().value.widget;
+  restoreDeleted(view, [{ widget: remoteWidget, from: 0, to: remoteText.length }], element, true);
+  const remoteRestore = last;
+  const record = () => state.field(restoredUnitsField).records[0];
+  assert("异地恢复写入唯一锚点，光标留在操作处",
+    record()?.origin === 0 && record().from === destination && state.selection.main.head === 0 &&
+    state.doc.sliceString(destination, destination + remoteText.length) === remoteText);
+  state = state.update({ changes: remoteRestore.changes.invert(remoteRestore.startState.doc),
+    annotations: Transaction.userEvent.of("undo") }).state;
+  assert("异地恢复撤销后记录不再可跳转", record().status === "undone" && state.doc.toString() === remoteDoc);
+  state = state.update({ changes: remoteRestore.changes, annotations: Transaction.userEvent.of("redo") }).state;
+  assert("异地恢复重做后恢复同一对锚点", record().status === "active" && record().origin === 0 && record().from === destination);
+  state = state.update({ changes: { from: destination, to: destination + remoteText.length } }).state;
+  assert("目标文字被剪掉后停用链接", record().status === "missing");
+  state = state.update({ changes: { from: state.doc.length, insert: remoteText } }).state;
+  assert("目标文字唯一地粘贴到另一位置时，原链接跟随",
+    record().status === "active" && record().to === state.doc.length && record().origin === 0);
 }
 
 {

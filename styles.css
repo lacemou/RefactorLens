@@ -62,7 +62,7 @@
 
 /* ================= 修订标记核心视觉 ================= */
 
-/* 1. 历史底稿删除文字 (Deleted Text): 浅红底色 + 红色中划线 + 严禁鼠标选中 */
+/* 1. 历史底稿删除文字：浅红底色与可划选的红色删除线 */
 .refactor-diff-deleted {
   background-color: rgba(239, 68, 68, 0.12) !important;
   color: #b91c1c !important;
@@ -1114,61 +1114,14 @@
 .refactor-deleted-widget {
   display: inline;
   white-space: pre-wrap;
+  user-select: text;
 }
 
 .refactor-deleted-unit {
   display: inline;
 }
 
-.refactor-deleted-tiny .refactor-diff-deleted {
-  cursor: context-menu !important;
-}
-
-.refactor-deleted-inline-actions {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  margin: 0 3px;
-  vertical-align: baseline;
-  opacity: 0.45;
-  transition: opacity 0.15s ease;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.refactor-deleted-widget:hover .refactor-deleted-inline-actions,
-.refactor-deleted-inline-actions:focus-within {
-  opacity: 1;
-}
-
-.refactor-deleted-inline-btn {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  padding: 0 5px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 9px;
-  background-color: var(--background-primary);
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 16px;
-  cursor: pointer;
-}
-
-.refactor-deleted-inline-btn:hover,
-.refactor-deleted-inline-btn:focus-visible {
-  border-color: var(--interactive-accent);
-  color: var(--text-normal);
-  background-color: var(--background-modifier-hover);
-}
-
-.refactor-deleted-restore-btn:hover,
-.refactor-deleted-restore-btn:focus-visible {
-  color: var(--interactive-accent);
-}
-
-.refactor-deleted-save-inline-btn:hover,
-.refactor-deleted-save-inline-btn:focus-visible {
-  border-color: #d97706;
-  color: #b45309;
+.refactor-restored-link {
+  margin-inline: 0.25em;
+  white-space: pre-wrap;
 }
