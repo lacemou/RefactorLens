@@ -63,77 +63,71 @@
 /* ================= 修订标记核心视觉 ================= */
 
 /* 1. 历史底稿删除文字：浅红底色与可划选的红色删除线 */
-.refactor-diff-deleted {
-  background-color: rgba(239, 68, 68, 0.12) !important;
-  color: #b91c1c !important;
-  text-decoration: line-through !important;
-  text-decoration-color: #ef4444 !important;
-  text-decoration-thickness: 1.5px !important;
+:is(.cm-content, .refactor-copilot-modal-root) .refactor-diff-deleted {
+  background-color: var(--refactor-deleted-bg, rgba(239, 68, 68, 0.12));
+  color: var(--refactor-deleted-text, #b91c1c);
+  text-decoration: line-through;
   border-radius: 3px;
   padding: 0 3px;
   margin: 0 1px;
-  user-select: text !important;
-  -webkit-user-select: text !important;
-  cursor: text !important;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .theme-dark .refactor-diff-deleted {
-  background-color: rgba(239, 68, 68, 0.22) !important;
-  color: #fca5a5 !important;
-  text-decoration-color: #f87171 !important;
+  --refactor-deleted-bg: rgba(239, 68, 68, 0.22);
+  --refactor-deleted-text: #fca5a5;
 }
 
 /* 1.1 现场编辑刚删掉的字 (Live Deletions - 按 Backspace 删字留痕) */
-.refactor-live-deleted {
-  background-color: rgba(244, 63, 94, 0.18) !important;
-  color: #e11d48 !important;
-  text-decoration: line-through double !important;
-  text-decoration-color: #f43f5e !important;
-  border-bottom: 1px dashed rgba(244, 63, 94, 0.5) !important;
+.cm-content .refactor-live-deleted {
+  background-color: var(--refactor-live-deleted-bg, rgba(244, 63, 94, 0.18));
+  color: var(--refactor-live-deleted-text, #e11d48);
+  border-bottom: 1px dashed rgba(244, 63, 94, 0.5);
 }
 
 .theme-dark .refactor-live-deleted {
-  background-color: rgba(244, 63, 94, 0.28) !important;
-  color: #fda4af !important;
-  text-decoration-color: #fb7185 !important;
+  --refactor-live-deleted-bg: rgba(244, 63, 94, 0.28);
+  --refactor-live-deleted-text: #fda4af;
 }
 
 /* 2. 新增文字 (Added Text): Word 纯净柔和淡绿微底，彻底抛弃刺眼下划线与所有小竖线！
    平整舒适，如同柔和荧光笔微扫，保证连续长文的最佳阅读体验
 */
-.refactor-diff-added {
-  color: #065f46 !important;
-  background-color: rgba(16, 185, 129, 0.13) !important;
-  text-decoration: none !important;
+:is(.cm-content, .refactor-copilot-modal-root) .refactor-diff-added {
+  color: var(--refactor-added-text, #065f46);
+  background-color: var(--refactor-added-bg, rgba(16, 185, 129, 0.13));
+  text-decoration: none;
   border-radius: 2px;
   padding: 1px 2px;
 }
 
 .theme-dark .refactor-diff-added {
-  color: #6ee7b7 !important;
-  background-color: rgba(16, 185, 129, 0.22) !important;
+  --refactor-added-text: #6ee7b7;
+  --refactor-added-bg: rgba(16, 185, 129, 0.22);
 }
 
 /* 2.1 现场键盘刚敲入的字 (Live Additions - 区分于历史版本演进) */
-.refactor-live-added {
-  color: #0284c7 !important;
-  background-color: rgba(14, 165, 233, 0.16) !important;
-  font-weight: 500 !important;
+.cm-content .refactor-live-added {
+  color: var(--refactor-live-added-text, #0284c7);
+  background-color: var(--refactor-live-added-bg, rgba(14, 165, 233, 0.16));
+  font-weight: 500;
   border-radius: 2px;
   padding: 1px 2px;
 }
 
 .theme-dark .refactor-live-added {
-  color: #38bdf8 !important;
-  background-color: rgba(14, 165, 233, 0.26) !important;
+  --refactor-live-added-text: #38bdf8;
+  --refactor-live-added-bg: rgba(14, 165, 233, 0.26);
 }
 
 /* 3. 段落搬家：新位置段首独立徽标与可折叠抽屉 */
-.refactor-moved-badge-container {
+.cm-content .refactor-moved-badge-container {
   display: block;
   margin: 8px 0 4px 0;
-  user-select: none !important;
-  -webkit-user-select: none !important;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .refactor-moved-origin {
@@ -547,37 +541,26 @@
   border-radius: 6px;
   font-size: 13px;
   line-height: 1.6;
-  user-select: text !important;
-  -webkit-user-select: text !important;
-  cursor: text !important;
 }
 
 .refactor-preview-old {
   opacity: 0.8;
-  user-select: text !important;
-  -webkit-user-select: text !important;
-  cursor: text !important;
 }
 
 .refactor-preview-new {
   font-weight: 500;
-  user-select: text !important;
-  -webkit-user-select: text !important;
-  cursor: text !important;
 }
 
-.refactor-preview-new span,
-.refactor-preview-old span {
-  user-select: text !important;
-  -webkit-user-select: text !important;
-  cursor: text !important;
+.refactor-copilot-modal-root .refactor-copilot-diff-preview,
+.refactor-copilot-modal-root .refactor-copilot-diff-preview :is(.refactor-preview-old, .refactor-preview-new, span) {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
-.refactor-preview-new ::selection,
-.refactor-preview-new span::selection,
-.refactor-copilot-diff-preview ::selection {
-  background-color: rgba(16, 185, 129, 0.35) !important;
-  color: inherit !important;
+.refactor-copilot-modal-root .refactor-copilot-diff-preview ::selection {
+  background-color: rgba(16, 185, 129, 0.35);
+  color: inherit;
 }
 
 .refactor-copilot-action-row {

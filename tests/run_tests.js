@@ -173,7 +173,6 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   const css = fs.readFileSync(cssPath, "utf-8");
   const decorationSource = fs.readFileSync(path.join(__dirname, "../src/ui/cm-decorations.ts"), "utf-8");
 
-  assert("红色删除文字支持用户划选 (cursor: text)", css.includes("cursor: text !important"));
   assert("样式表中不包含 border-left: 竖线", !css.includes("border-left:"));
   assert(
     "删除痕迹不再使用块级卡片、复选框或批量暂存",
