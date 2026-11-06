@@ -7,6 +7,7 @@ export interface BaselineSelectionHandler {
   onOpenScratchpad?: () => void;
   getScratchpadCount?: () => Promise<number>;
   onOpenCopilot?: () => void;
+  getCliStatus?: () => Promise<string>;
   onOpenSettings?: () => void;
 }
 
@@ -43,6 +44,7 @@ export class BaselinePillView {
   private pillEl: HTMLElement;
   private app: App;
   private handler: BaselineSelectionHandler;
+  private menuRequest = 0;
 
   constructor(containerEl: HTMLElement, app: App, handler: BaselineSelectionHandler) {
     this.containerEl = containerEl;
@@ -83,6 +85,7 @@ export class BaselinePillView {
   }
 
   public destroy(): void {
+    this.menuRequest++;
     this.pillEl.remove();
   }
 
@@ -90,6 +93,7 @@ export class BaselinePillView {
    * 点击弹出整合式全能创作控制面板
    */
   private async showPillMenu(evt: MouseEvent): Promise<void> {
+    const request = ++this.menuRequest;
     const menu = new Menu();
     const currentBaseline = this.handler.getCurrentBaseline();
     const currentFile = this.handler.getCurrentFile();
@@ -145,10 +149,12 @@ export class BaselinePillView {
     menu.addSeparator();
 
     // 4. 灵感抽屉入口
-    let scratchpadCount = 0;
-    if (this.handler.getScratchpadCount) {
-      scratchpadCount = await this.handler.getScratchpadCount();
-    }
+    const [count, status] = await Promise.allSettled([
+      this.handler.getScratchpadCount?.(),
+      this.handler.getCliStatus?.(),
+    ]);
+    if (request !== this.menuRequest || this.handler.getCurrentFile() !== currentFile) return;
+    const scratchpadCount = count.status === "fulfilled" ? count.value ?? 0 : 0;
     menu.addItem((item) => {
       item
         .setTitle(`📦 打开灵感暂存抽屉 (已存 ${scratchpadCount} 条)`)
@@ -161,12 +167,16 @@ export class BaselinePillView {
     // 5. 改写顾问入口
     menu.addItem((item) => {
       item
-        .setTitle("✨ 呼出 Codex 改写顾问")
+        .setTitle("✨ 呼出改写顾问")
         .setIcon("wand")
         .onClick(() => {
           if (this.handler.onOpenCopilot) this.handler.onOpenCopilot();
         });
     });
+    if (this.handler.getCliStatus) {
+      const label = status.status === "fulfilled" ? status.value : undefined;
+      menu.addItem((item) => item.setTitle(label ?? "CLI：暂无法检测").setDisabled(true));
+    }
 
     // 6. 插件设置中心
     menu.addItem((item) => {

@@ -33,6 +33,7 @@ Move detection is heuristic. Always review its result before treating a paragrap
 ### In-place AI rewriting
 
 - Select text and open the rewrite assistant from Obsidian.
+- Open the revision lens menu to see whether the selected CLI was detected.
 - Use a custom instruction or quick actions for a more natural, conversational, concise, or pain-point-focused rewrite.
 - Review multiple candidates before changing the note.
 - Accept the entire rewrite, copy a selection from a suggestion to paste manually, or discard it.
@@ -166,6 +167,7 @@ Please avoid including private note content, credentials, or personal paths in a
 ### AI 行内改写
 
 - 选中文字后在 Obsidian 内呼出改写顾问。
+- 打开顶部修订透镜药丸，可以在改写入口旁查看当前 CLI 的检测状态。
 - 输入自定义要求，或使用自然化、口语化、精炼、加深现实痛点等快捷指令。
 - 修改正文前先查看多个候选结果。
 - 可采纳整句、复制选中的候选文字后自行粘贴，或放弃改写。

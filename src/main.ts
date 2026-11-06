@@ -53,7 +53,7 @@ export default class RefactorLensPlugin extends Plugin {
       void this.activateScratchpadView();
     });
 
-    // 6. 注册选区跟随浮动小胶囊 + 右下角悬浮球
+    // 6. 注册选区操作胶囊
     this.floatingCopilot = new FloatingCopilotManager(this.app, {
       onTriggerCopilot: (editor, view) => {
         void this.openCopilotModal(editor, view);
@@ -66,16 +66,6 @@ export default class RefactorLensPlugin extends Plugin {
       },
       onSaveDeletedSelection: (text, view) => {
         void this.saveSelection(text, view);
-      },
-      onOpenScratchpad: () => {
-        void this.activateScratchpadView();
-      },
-      isCodexReady: async () => {
-        const detect = await this.codexEngine.detectCli();
-        return detect.available;
-      },
-      onOpenSettings: () => {
-        new Notice("请打开 Obsidian 设置 → 第三方插件 → Refactor Lens。");
       },
     });
 
@@ -160,7 +150,7 @@ export default class RefactorLensPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("file-open", (file) => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView);
       if (file && view?.file === file) this.handleActiveLeafChange(view.leaf);
-      else if (!file) this.floatingCopilot?.attachToView(null);
+      else if (!file) this.floatingCopilot?.hideSelectionPopover();
     }));
     this.registerEvent(this.app.workspace.on("layout-change", () => {
       const views = new Set(this.app.workspace.getLeavesOfType("markdown").map((leaf) => leaf.view));
@@ -308,17 +298,9 @@ export default class RefactorLensPlugin extends Plugin {
   }
 
   private handleActiveLeafChange(leaf: WorkspaceLeaf | null) {
-    if (!leaf) {
-      this.floatingCopilot?.attachToView(null);
-      return;
-    }
-    const view = leaf.view;
-    if (!(view instanceof MarkdownView) || !view.file) {
-      this.floatingCopilot?.attachToView(null);
-      return;
-    }
-
-    this.floatingCopilot?.attachToView(view);
+    this.floatingCopilot?.hideSelectionPopover();
+    const view = leaf?.view;
+    if (!(view instanceof MarkdownView) || !view.file) return;
     const file = view.file;
     const header = view.containerEl.querySelector<HTMLElement>(".view-header");
     const existing = this.pillViews.get(view);
@@ -343,6 +325,16 @@ export default class RefactorLensPlugin extends Plugin {
         },
         onOpenCopilot: () => {
           void this.openCopilotModal(view.editor, view);
+        },
+        getCliStatus: async () => {
+          const settings = { ...this.settings };
+          const name = settings.rewriteBackend === "deepseek" ? "DeepSeek Harness" : "Codex CLI";
+          const result = await this.codexEngine.detectCli(settings);
+          if (result.available === true) return `${name}：已检测到`;
+          if (result.reason === "missing") return `${name}：未找到`;
+          if (result.reason === "directory") return `${name}：路径指向目录`;
+          if (result.reason === "dependency") return `${name}：缺少依赖`;
+          return `${name}：无法启动`;
         },
         onOpenSettings: () => {
           new Notice("请打开 Obsidian 设置 → 第三方插件 → Refactor Lens。");
