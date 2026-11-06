@@ -837,40 +837,6 @@
 }
 
 
-/* 每一行删除文字末尾的独立暂存胶囊 */
-.refactor-line-save-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 500;
-  background-color: rgba(245, 158, 11, 0.15);
-  color: #b45309;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  cursor: pointer;
-  vertical-align: middle;
-  text-decoration: none !important;
-  user-select: none !important;
-  -webkit-user-select: none !important;
-  transition: all 0.15s ease;
-}
-
-.refactor-line-save-badge:hover {
-  background-color: rgba(245, 158, 11, 0.28);
-  border-color: rgba(245, 158, 11, 0.6);
-  transform: scale(1.05);
-}
-
-.theme-dark .refactor-line-save-badge {
-  background-color: rgba(245, 158, 11, 0.2);
-  color: #fde68a;
-  border-color: rgba(245, 158, 11, 0.45);
-}
-
-
 /* 改写弹窗底部的温馨提示框 */
 .refactor-copilot-hint-box {
   font-size: 11px;
