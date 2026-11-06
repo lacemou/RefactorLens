@@ -133,7 +133,12 @@ export class RefactorLensSettingTab extends PluginSettingTab {
                   button
                     .setButtonText("测试连接")
                     .setCta()
-                    .onClick(() => void this.testConnection(setting))
+                    .onClick(() => {
+                      button.setDisabled(true);
+                      void this.testConnection(setting).catch(() => {
+                        setting.setDesc("CLI 检查未能完成。请在系统终端运行 CLI 的 --version 命令，再重试。");
+                      }).finally(() => button.setDisabled(false));
+                    })
                 );
             },
           },
@@ -188,6 +193,7 @@ export class RefactorLensSettingTab extends PluginSettingTab {
     }
 
     if (settings.rewriteBackend === "deepseek") {
+      setting.setDesc("已找到 CLI，正在检查无界面模式…");
       const status = await this.plugin.codexEngine.checkHarnessHeadless(detect.path);
       if (status === "ready") {
         setting.setDesc(`已检测到 ${model}（${detect.version}），headless 模式就绪。此检查未调用模型。`);
@@ -198,7 +204,12 @@ export class RefactorLensSettingTab extends PluginSettingTab {
       }
       return;
     }
+    setting.setDesc("已找到 Codex CLI，正在检查登录状态…");
     const loginStatus = await this.plugin.codexEngine.checkLoginStatus(detect.path);
+    if (loginStatus === null) {
+      setting.setDesc(`已找到 Codex CLI，但登录状态检查超时。请在系统终端运行 \`codex login status\`。`);
+      return;
+    }
     const isLoggedIn = /chatgpt|logged in/i.test(loginStatus);
     if (isLoggedIn) {
       setting.setDesc(`✅ ${model}，登录状态：${loginStatus}。`);

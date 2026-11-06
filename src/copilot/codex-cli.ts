@@ -1,11 +1,11 @@
-import { execFile, spawn, type ChildProcessByStdio } from "child_process";
+import { execFile, spawn, type ChildProcessByStdio, type ExecFileException } from "child_process";
 import type { Readable, Writable } from "stream";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
 
 type CliDetection = { available: true; path: string; version: string } |
-  { available: false; path: string; reason: "missing" | "directory" | "dependency" | "launch" };
+  { available: false; path: string; reason: "missing" | "directory" | "dependency" | "launch" | "wrapper" | "timeout" };
 
 export interface CodexRewriteOptions {
   originalText: string;
@@ -62,43 +62,78 @@ export class CodexCliEngine {
 
     const deepseek = settings.rewriteBackend === "deepseek";
     const name = deepseek ? "dsh" : "codex";
-    const custom = (deepseek ? settings.deepseekCliPath : settings.codexCliPath).trim();
-    const candidates = custom ? [custom] : [
+    const custom = (deepseek ? settings.deepseekCliPath : settings.codexCliPath).trim().replace(/^"([^"]+)"$/, "$1");
+    const wrapper = isWin && /\.(?:cmd|bat|ps1)$/i.test(custom);
+    const candidates = isWin ? this.windowsCandidates(name, custom, wrapper) : custom ? [custom] : [
       path.join(home, "Library/pnpm/bin", name),
       path.join(home, ".npm-global/bin", name),
       `/opt/homebrew/bin/${name}`,
       `/usr/local/bin/${name}`,
       path.join(home, ".local/bin", name),
-      isWin ? `${name}.exe` : name,
+      name,
     ];
 
-    let failure: CliDetection = { available: false, path: custom, reason: "missing" };
+    let failure: CliDetection = { available: false, path: custom, reason: wrapper ? "wrapper" : "missing" };
     for (const cand of candidates) {
       if (path.isAbsolute(cand)) {
         let stat: fs.Stats | undefined;
         try {
           stat = fs.statSync(cand, { throwIfNoEntry: false });
         } catch {
-          if (custom) return { available: false, path: cand, reason: "launch" };
+          if (custom && !wrapper) return { available: false, path: cand, reason: "launch" };
           continue;
         }
         if (!stat) continue;
         if (stat.isDirectory()) {
-          if (custom) return { available: false, path: cand, reason: "directory" };
+          if (custom && !wrapper) return { available: false, path: cand, reason: "directory" };
           continue;
         }
       }
 
       const result = await this.checkExecutable(cand);
       if (result.available === true) return result;
+      if (result.reason === "timeout") return result;
       if (result.reason !== "missing" && failure.reason === "missing") failure = result;
     }
 
     return failure;
   }
 
+  private windowsCandidates(name: string, custom: string, wrapper: boolean): string[] {
+    if (custom && !wrapper) return [custom];
+    if (name !== "codex" || (custom && (!path.isAbsolute(custom) || !/^codex\.(?:cmd|ps1)$/i.test(path.basename(custom))))) {
+      return custom ? [] : [`${name}.exe`];
+    }
+
+    const appData = process.env.APPDATA;
+    const pathValue = Object.entries(process.env).find(([key]) => key.toLowerCase() === "path")?.[1] ?? "";
+    const prefixes = custom ? [path.dirname(custom)] : [
+      ...pathValue.split(";").map((entry) => entry.trim().replace(/^"([^"]+)"$/, "$1")),
+      ...(appData ? [path.join(appData, "npm")] : []),
+    ];
+    const arch = os.arch();
+    const triple = arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
+    const candidates = custom ? [] : ["codex.exe"];
+    for (const prefix of new Set(prefixes.filter((entry) => path.isAbsolute(entry)))) {
+      const packages = path.join(prefix, "node_modules", "@openai");
+      const platformPackage = `codex-win32-${arch}`;
+      const roots = [
+        path.join(packages, platformPackage),
+        path.join(packages, "codex", "node_modules", "@openai", platformPackage),
+        path.join(packages, "codex"),
+      ];
+      for (const root of roots) {
+        candidates.push(path.join(root, "vendor", triple, "bin", "codex.exe"));
+        candidates.push(path.join(root, "vendor", triple, "codex", "codex.exe"));
+      }
+    }
+    return candidates;
+  }
+
   public describeCliFailure(result: Extract<CliDetection, { available: false }>): string {
     switch (result.reason) {
+      case "wrapper": return "无法直接运行 Windows 命令脚本。请填写 CLI 原生 .exe 文件的绝对路径。";
+      case "timeout": return "CLI 版本检查超时。请在系统终端运行 --version 检查。";
       case "directory": return "这里需要 CLI 可执行文件的绝对路径，不能填写安装目录。";
       case "dependency": return "已找到 CLI，但启动时缺少依赖。请先修复安装，并在终端运行 --version 确认。";
       case "launch": return "已找到 CLI，但无法启动。请在终端运行 --version 检查程序和 Node.js。";
@@ -106,59 +141,48 @@ export class CodexCliEngine {
     }
   }
 
-  public async checkLoginStatus(bin: string): Promise<string> {
+  public async checkLoginStatus(bin: string): Promise<string | null> {
     // 只通过 CLI 查询状态，不直接读取 Codex 的凭据文件。
-    return new Promise((resolve) => {
-      execFile(
-        bin,
-        ["login", "status"],
-        { timeout: 4000, env: this.getEnhancedEnv(), windowsHide: true },
-        (_error, stdout, stderr) => {
-          const out = ((stdout || "") + "\n" + (stderr || "")).trim();
-          if (out.includes("Logged in using ChatGPT")) {
-            resolve("Logged in using ChatGPT");
-          } else if (out.includes("Logged in")) {
-            resolve(out);
-          } else if (out) {
-            resolve(out);
-          } else {
-            resolve("未检测到登录状态");
-          }
-        }
-      );
-    });
+    const result = await this.probeCli(bin, ["login", "status"], 4000);
+    if (result === null) return null;
+    const out = `${result.stdout}\n${result.stderr}`.trim();
+    if (out.includes("Logged in using ChatGPT")) return "Logged in using ChatGPT";
+    return out || "未检测到登录状态";
   }
 
   public async checkHarnessHeadless(bin: string): Promise<"ready" | "outdated" | "unavailable"> {
-    return new Promise((resolve) => {
-      execFile(bin, ["--profile", "headless", "--help"], {
-        timeout: 8000, env: this.getEnhancedEnv(), windowsHide: true,
-      }, (error, stdout) => {
-        if (error) resolve("unavailable");
-        else resolve(stdout.includes("--permission-mode") && stdout.includes("--approval-policy") ? "ready" : "outdated");
-      });
-    });
+    const result = await this.probeCli(bin, ["--profile", "headless", "--help"], 8000);
+    if (result === null || result.error) return "unavailable";
+    return result.stdout.includes("--permission-mode") && result.stdout.includes("--approval-policy") ? "ready" : "outdated";
   }
 
-  private checkExecutable(bin: string): Promise<CliDetection> {
+  private async checkExecutable(bin: string): Promise<CliDetection> {
+    const result = await this.probeCli(bin, ["--version"], 4000);
+    if (result === null) return { available: false, path: bin, reason: "timeout" };
+    const { error, stdout, stderr } = result;
+    if (!error && stdout.trim()) return { available: true, path: bin, version: stdout.trim() };
+    return {
+      available: false,
+      path: bin,
+      reason: error?.code === "ENOENT" ? "missing" :
+        /MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND|Cannot find module/.test(stderr) ? "dependency" : "launch",
+    };
+  }
+
+  private probeCli(bin: string, args: string[], timeoutMs: number):
+    Promise<{ error: ExecFileException | null; stdout: string; stderr: string } | null> {
     return new Promise((resolve) => {
-      execFile(
-        bin,
-        ["--version"],
-        { timeout: 4000, env: this.getEnhancedEnv(), windowsHide: true },
-        (error, stdout, stderr) => {
-          if (!error && stdout) {
-            resolve({ available: true, path: bin, version: stdout.trim() });
-          } else {
-            resolve({
-              available: false,
-              path: bin,
-              reason: error?.code === "ENOENT" ? "missing" :
-                /MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND|Cannot find module/.test(stderr) ? "dependency" : "launch",
-            });
-          }
-        }
-      );
+      const child = execFile(bin, args, { env: this.getEnhancedEnv(), windowsHide: true }, (error, stdout, stderr) => {
+        window.clearTimeout(timer);
+        resolve({ error, stdout, stderr });
+      });
+      // Resolve at the deadline even if a wrapper or descendant keeps a pipe open.
+      const timer = window.setTimeout(() => {
+        resolve(null);
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        try { child.kill(); } catch { /* The check has already timed out. */ }
+      }, timeoutMs);
     });
   }
 

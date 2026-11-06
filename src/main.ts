@@ -334,6 +334,8 @@ export default class RefactorLensPlugin extends Plugin {
           if (result.reason === "missing") return `${name}：未找到`;
           if (result.reason === "directory") return `${name}：路径指向目录`;
           if (result.reason === "dependency") return `${name}：缺少依赖`;
+          if (result.reason === "wrapper") return `${name}：需要原生 .exe`;
+          if (result.reason === "timeout") return `${name}：检查超时`;
           return `${name}：无法启动`;
         },
         onOpenSettings: () => {

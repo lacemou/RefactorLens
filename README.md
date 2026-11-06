@@ -48,6 +48,8 @@ Leave the executable path blank for auto-detection. If it fails, enter the absol
 
 Open the header pill menu to see the selected CLI's detection status beside the rewrite assistant. **Test connection** (测试连接) in plugin settings checks Codex sign-in status or whether Harness headless supports the required flags. Neither check sends note text or verifies that a model request will succeed. If Harness is detected but cannot run, check `dsh --version` and `dsh --profile headless --help`; the latter must list both `--permission-mode` and `--approval-policy`.
 
+On Windows, run `where.exe codex` and `codex --version` in PowerShell. If automatic detection fails, enter the full path to the native `codex.exe` in plugin settings. The plugin can resolve standard npm installations to their native executable without running the `codex.cmd` script.
+
 ### Inspiration scratchpad
 
 - Save selected text, including explicitly selected deletions, without losing it.
@@ -188,6 +190,8 @@ AI 改写是可选功能。稿件比对、文字恢复和灵感抽屉都不需�
 | [DeepSeek Harness CLI](https://github.com/deepseek-ai/deepseek-harness) | 程序为 `dsh`。模型 ID 留空就沿用 Harness headless 配置。若指定模型，提供方 ID 留空会使用 `deepseek-official`；官方路由的 `deepseek-flash` 对应 [DeepSeek-V4.1-Flash](https://api-docs.deepseek.com/api/list-models/)。自定义网关需填在 Harness 中已配置的提供方和模型 ID。 | 标准 headless 配置不会复用图形界面的登录。官方路由可通过进程环境或 Harness 主目录的 `.env` 提供 `DEEPSEEK_API_KEY`，通常是 `~/.dsh/.env`；自定义主目录则是 `$DSH_HOME/.env`。详见 [headless 认证说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/bundle/headless/README.md#credentials)。 |
 
 程序路径可留空自动探测。找不到时，填写**可执行文件的绝对路径**，不要填安装目录或整条命令。macOS 上可用 `command -v codex` 或 `command -v dsh` 查找。只在终端里导出的变量，从 Dock 启动的 Obsidian 不一定能继承。插件会从私有临时目录启动 `dsh`，所以 Vault 里的 `.env` 不会作为其工作目录配置使用。
+
+Windows 上可在 PowerShell 运行 `where.exe codex` 和 `codex --version`。如果自动探测失败，请在设置里填写原生 `codex.exe` 的绝对路径。对于标准 npm 安装，插件可以定位原生程序，无需执行 `codex.cmd` 脚本。
 
 顶部修订透镜药丸的「呼出改写顾问」旁显示所选 CLI 的检测状态。设置里的「测试连接」进一步检查 Codex 登录状态，或 Harness headless 是否支持所需参数；两处检查都不发送文稿，也不代表模型调用一定能成功。如果检测到 Harness 但改写失败，先运行 `dsh --version` 和 `dsh --profile headless --help`，确认后者列出了 `--permission-mode` 和 `--approval-policy`。
 

@@ -507,11 +507,58 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   assert("Harness 模型留空时保留用户本机模型路由", patch.length === 1);
 }
 
-console.log("\n=== 测试汇总 ===");
-const passedCount = results.filter(r => r.passed).length;
-console.log(`全部测试: ${results.length} | 通过: ${passedCount} | 失败: ${results.length - passedCount}`);
-if (passedCount === results.length) {
-  console.log("🎉 全部测试 100% 通过！");
-} else {
-  process.exit(1);
+async function testWindowsCliDetection() {
+  const prefix = "C:\\Users\\Writer\\AppData\\Roaming\\npm";
+  const executable = path.win32.join(prefix, "node_modules", "@openai", "codex", "node_modules", "@openai",
+    "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
+  let stalled = false;
+  let killed = false;
+  const calls = [];
+  const { CodexCliEngine } = loadPluginSource("copilot/codex-cli.ts", {
+    process: { env: { APPDATA: path.win32.dirname(prefix), Path: prefix } },
+    window: { setTimeout: (callback) => setTimeout(callback, 20), clearTimeout },
+  }, (id) => {
+    if (id === "os") return { platform: () => "win32", homedir: () => "C:\\Users\\Writer", arch: () => "x64" };
+    if (id === "path") return path.win32;
+    if (id === "fs") return { statSync: (file) => file === executable ? { isDirectory: () => false } : undefined };
+    if (id === "child_process") return {
+      execFile(bin, args, _options, callback) {
+        calls.push([bin, ...args]);
+        if (!stalled) queueMicrotask(() => bin !== executable
+          ? callback({ code: "ENOENT" }, "", "")
+          : callback(null, args[0] === "--version" ? "codex-cli 0.1.0" : "Logged in using ChatGPT", ""));
+        return { kill() { killed = true; } };
+      },
+    };
+    return require(id);
+  });
+  const settings = { rewriteBackend: "codex", codexCliPath: "", codexModel: "", deepseekCliPath: "", deepseekProvider: "", deepseekModel: "" };
+  const engine = new CodexCliEngine(settings);
+  const found = await engine.detectCli();
+  assert("Windows npm 安装能找到原生 Codex 程序", found.available && found.path === executable);
+  const fromWrapper = await engine.detectCli({ ...settings, codexCliPath: path.win32.join(prefix, "codex.cmd") });
+  assert("Codex 的 npm 启动脚本会定位到原生程序，且登录检查使用同一个程序",
+    fromWrapper.available && fromWrapper.path === executable &&
+    await engine.checkLoginStatus(executable) === "Logged in using ChatGPT" &&
+    calls.every(([bin]) => !bin.endsWith(".cmd")));
+  const unsupported = await engine.detectCli({ ...settings, codexCliPath: "C:\\test\\unrecognized.cmd" });
+  assert("任意 Windows 脚本不会执行", !unsupported.available && unsupported.reason === "wrapper");
+  stalled = true;
+  const timeout = await engine.detectCli({ ...settings, codexCliPath: executable });
+  assert("子进程没有回调时，版本检查仍结束并返回超时",
+    !timeout.available && timeout.reason === "timeout" && killed);
 }
+
+void testWindowsCliDetection().then(() => {
+  console.log("\n=== 测试汇总 ===");
+  const passedCount = results.filter(r => r.passed).length;
+  console.log(`全部测试: ${results.length} | 通过: ${passedCount} | 失败: ${results.length - passedCount}`);
+  if (passedCount === results.length) {
+    console.log("🎉 全部测试 100% 通过！");
+  } else {
+    process.exitCode = 1;
+  }
+}).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
