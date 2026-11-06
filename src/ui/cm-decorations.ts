@@ -151,25 +151,42 @@ type PickedDeletion = { widget: DeletedUnitWidget; from: number; to: number };
 export function readDeletedSelection(view: EditorView, selection: Selection) {
   if (selection.isCollapsed || !selection.rangeCount) return null;
   const range = selection.getRangeAt(0);
-  const start = range.startContainer.parentElement?.closest(".refactor-diff-deleted");
-  const end = range.endContainer.parentElement?.closest(".refactor-diff-deleted");
-  if (!start || !end || deletedElements.get(start)?.view !== view || deletedElements.get(end)?.view !== view) return null;
+  if (!view.contentDOM.contains(range.commonAncestorContainer)) return null;
   const picked: PickedDeletion[] = [];
+  let first: { element: Element; node: Node; offset: number } | undefined;
+  let last: { node: Node; offset: number } | undefined;
   for (const element of Array.from(view.contentDOM.querySelectorAll(".refactor-deleted-widget .refactor-diff-deleted"))) {
     const entry = deletedElements.get(element);
-    if (!entry || !range.intersectsNode(element)) continue;
+    const node = element.firstChild;
+    if (entry?.view !== view || !node || !range.intersectsNode(element)) continue;
     const { widget } = entry;
     const raw = widget.unit.rawText;
+    const length = widget.unit.displayText.length;
+    const startOffset = range.startContainer === node ? range.startOffset : 0;
+    const endOffset = range.endContainer === node ? range.endOffset : length;
+    // A boundary can be on the wrapper, a neighboring whitespace node, or the
+    // end of the preceding red span. Count characters, not intersected elements.
+    if (startOffset >= endOffset || range.comparePoint(node, startOffset) !== 0 ||
+        range.comparePoint(node, endOffset) !== 0) continue;
     const leading = raw.length - raw.trimStart().length;
-    const from = range.startContainer === element.firstChild && range.startOffset > 0
-      ? leading + range.startOffset : 0;
-    const to = range.endContainer === element.firstChild && range.endOffset < widget.unit.displayText.length
-      ? leading + range.endOffset : raw.length;
-    if (from < to && raw.slice(from, to).trim()) picked.push({ widget, from, to });
+    if (!first) first = { element, node, offset: startOffset };
+    last = { node, offset: endOffset };
+    picked.push({
+      widget,
+      from: startOffset === 0 ? 0 : leading + startOffset,
+      to: endOffset === length ? raw.length : leading + endOffset,
+    });
   }
-  if (!picked.length) return null;
+  if (!first || !last) return null;
+  const leadingSelection = range.cloneRange();
+  leadingSelection.setEnd(first.node, first.offset);
+  const trailingSelection = range.cloneRange();
+  trailingSelection.setStart(last.node, last.offset);
+  // Do not hijack a normal prose selection that merely crosses a deletion widget.
+  if (/[^\s\u200b\ufeff]/u.test(leadingSelection.toString() + trailingSelection.toString())) return null;
   const text = picked.map(({ widget, from, to }) => widget.unit.rawText.slice(from, to)).join("").trim();
-  return { text, restore: () => restoreDeleted(view, picked, start) };
+  const anchor = first.element;
+  return text ? { text, restore: () => restoreDeleted(view, picked, anchor) } : null;
 }
 
 function originalDestination(view: EditorView, item: Deletion): number | undefined {

@@ -259,95 +259,85 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   assert("数字序号前缀被彻底剥离", cleanOutput(dirty3) === "这是一句经过数字编号的句子。");
 }
 
-// Test 7: 仅采纳半句智能融合拼接测试
+// Exercise the actual rewrite action handlers, with clipboard and editor side effects separated.
 {
-  function computeHalfSentenceMerge(origText, candText, selectedPart) {
-    const orig = origText.trim();
-    const cand = candText.trim();
-    const sel = selectedPart.trim();
-
-    if (!sel || sel === cand) return cand;
-
-    const startIdx = cand.indexOf(sel);
-    if (startIdx === -1) return cand;
-    const endIdx = startIdx + sel.length;
-
-    const isPrefix = startIdx <= 2;
-    const isSuffix = endIdx >= cand.length - 2;
-
-    const beforeInCand = cand.substring(0, startIdx).trim();
-    const punctRegex = /[，,：:；;！!？?]/g;
-
-    if (isSuffix && !isPrefix) {
-      const leadPunctMatch = beforeInCand.match(/([，,：:；;])[^，,：:；;]*$/);
-      const leadPunct = leadPunctMatch ? leadPunctMatch[1] : null;
-
-      let splitPos = -1;
-      if (leadPunct) {
-        splitPos = orig.lastIndexOf(leadPunct);
-      }
-      if (splitPos === -1) {
-        const matches = [...orig.matchAll(punctRegex)];
-        if (matches.length > 0) {
-          splitPos = matches[matches.length - 1].index;
-        }
-      }
-
-      if (splitPos !== -1) {
-        const origPrefix = orig.substring(0, splitPos + 1);
-        const cleanSel = sel.replace(/^[，,：:；;\s]+/, "");
-        return origPrefix + cleanSel;
-      }
-    } else if (isPrefix && !isSuffix) {
-      const endPunctMatch = cand.substring(startIdx).match(/^[^，,：:；;]*([，,：:；;])/);
-      const endPunct = endPunctMatch ? endPunctMatch[1] : null;
-
-      let splitPos = -1;
-      if (endPunct) {
-        splitPos = orig.indexOf(endPunct);
-      }
-      if (splitPos === -1) {
-        const matches = [...orig.matchAll(punctRegex)];
-        if (matches.length > 0) {
-          splitPos = matches[0].index;
-        }
-      }
-
-      if (splitPos !== -1) {
-        const origSuffix = orig.substring(splitPos);
-        const cleanSel = sel.replace(/[，,：:；;\s]+$/, "");
-        return cleanSel + origSuffix;
-      }
-    }
-
-    const startRatio = startIdx / cand.length;
-    const endRatio = endIdx / cand.length;
-    const origCutStart = Math.round(orig.length * startRatio);
-    const origCutEnd = Math.round(orig.length * endRatio);
-
-    return orig.substring(0, origCutStart) + sel + orig.substring(origCutEnd);
+  let range;
+  let writes = [];
+  const selection = { rangeCount: 1, get isCollapsed() { return !range; }, getRangeAt: () => range };
+  const listeners = new Map();
+  const document = {
+    getSelection: () => selection,
+    addEventListener: (event, listener) => listeners.set(event, listener),
+    removeEventListener: (event) => listeners.delete(event),
+    defaultView: { navigator: { clipboard: { writeText: (text) => { writes.push(text); return Promise.resolve(); } } } },
+  };
+  const buttons = new Map();
+  function el(parent, text) {
+    return {
+      text, parent, ownerDocument: document, empty() {}, removeClass() {}, setText() {},
+      contains(node) { return node === this || (node && this.contains(node.parent)); },
+      createDiv(opts = {}) { return el(this, opts.text); },
+      createSpan(opts = {}) { return el(this, opts.text); },
+      createEl(tag, opts) {
+        const child = el(this, opts.text);
+        if (tag === "button") buttons.set(opts.text, child);
+        return child;
+      },
+      addEventListener(event, callback) { this[event] = callback; },
+    };
   }
-
-  // 1. 后半句出彩拼接
-  const orig1 = "这时候，还要多看评论区里读者的真实留言：大家是在问提示词怎么写，还是在问本地环境配置怎么操作？";
-  const cand1 = "老实说，多翻翻评论区读者的吐槽：大家纠结的到底是提示词，还是死磕本地环境配置？";
-  const sel1 = "大家纠结的到底是提示词，还是死磕本地环境配置？";
-  const res1 = computeHalfSentenceMerge(orig1, cand1, sel1);
-  assert("仅采纳后半句：保留原句前半句，出彩后半句精准拼入", res1 === "这时候，还要多看评论区里读者的真实留言：大家纠结的到底是提示词，还是死磕本地环境配置？");
-
-  // 2. 前半句出彩拼接
-  const orig2 = "很多时候我们觉得只要工具够多，效率就会成倍提升。";
-  const cand2 = "说白了工具多不等于能打，关键看判断力。";
-  const sel2 = "说白了工具多不等于能打";
-  const res2 = computeHalfSentenceMerge(orig2, cand2, sel2);
-  assert("仅采纳前半句：出彩前半句替换原句开头，原句后半句完好保留", res2 === "说白了工具多不等于能打，效率就会成倍提升。");
-
-  // 3. 样式表包含半句卡片与文字可选中保护
-  const cssPath = path.join(__dirname, "../styles.css");
-  const css = fs.readFileSync(cssPath, "utf-8");
-  assert("样式表包含半句融合预览卡片样式", css.includes(".refactor-partial-preview-card") && css.includes(".refactor-btn-partial-confirm"));
-  assert("绿色改写句支持鼠标划选 (user-select: text)", css.includes(".refactor-preview-new") && css.includes("user-select: text !important"));
-  assert("支持快捷分句胶囊栏样式", css.includes(".refactor-clause-chips-bar") && css.includes(".refactor-clause-chip"));
+  const { InPlaceCopilotModal } = loadPluginSource("copilot/copilot-modal.ts", {}, (id) => id === "obsidian"
+    ? { Modal: class { close() { this.closed = true; } }, Notice: class {} }
+    : require(id));
+  const original = "这是一段原文。";
+  const candidate = "前半句，留着 *这部分*。";
+  const from = { line: 0, ch: 2 };
+  const to = { line: 0, ch: 10 };
+  const edits = [];
+  let current = true;
+  const modal = new InPlaceCopilotModal({
+    app: {}, editor: { replaceRange: (...args) => edits.push(args) }, codexEngine: {},
+    source: { from, to, original, isCurrent: () => current },
+  });
+  let candidateNode;
+  modal.resultContainer = el();
+  const createPreview = modal.resultContainer.createDiv;
+  modal.resultContainer.createDiv = function (opts) {
+    const preview = createPreview.call(this, opts);
+    if (opts.cls === "refactor-copilot-diff-preview") {
+      const create = preview.createDiv;
+      preview.createDiv = function (options) {
+        const row = create.call(this, options);
+        if (options.cls === "refactor-preview-new") candidateNode = row;
+        return row;
+      };
+    }
+    return preview;
+  };
+  modal.candidates = [candidate];
+  modal.renderCurrentCandidate();
+  const copy = buttons.get("复制所选文字");
+  const accept = buttons.get("采纳整句");
+  const reject = buttons.get("放弃");
+  assert("改写候选只提供采纳、复制和放弃，未选中文字时不能复制",
+    buttons.size === 3 && copy.disabled);
+  range = { startContainer: candidateNode, endContainer: el(), toString: () => "选区跨出候选" };
+  listeners.get("selectionchange")();
+  copy.click();
+  assert("不能复制跨出候选区域的选区", copy.disabled && writes.length === 0);
+  range = { startContainer: candidateNode, endContainer: candidateNode, toString: () => " *这部分*" };
+  listeners.get("selectionchange")();
+  copy.click();
+  assert("复制保留所选原样且不改正文", !copy.disabled && writes[0] === " *这部分*" && edits.length === 0);
+  reject.click();
+  assert("放弃关闭面板且不改正文", modal.closed && edits.length === 0);
+  current = false;
+  accept.click();
+  assert("原选区变化时不会误替换", edits.length === 0);
+  current = true;
+  accept.click();
+  assert("采纳整句只替换原选区", edits.length === 1 && edits[0][0] === candidate &&
+    edits[0][1] === from && edits[0][2] === to);
 }
 
 // Restore again after undo with the exact same DOM widget, as CodeMirror may reuse it.

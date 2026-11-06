@@ -580,52 +580,6 @@
   color: inherit !important;
 }
 
-/* 快捷分句胶囊栏 */
-.refactor-clause-chips-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-top: 6px;
-  padding: 6px 10px;
-  background-color: rgba(16, 185, 129, 0.06);
-  border: 1px dashed rgba(16, 185, 129, 0.35);
-  border-radius: 6px;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.refactor-chips-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.refactor-clause-chip {
-  font-size: 11px;
-  padding: 3px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  background-color: rgba(16, 185, 129, 0.12);
-  color: #065f46;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.refactor-clause-chip:hover {
-  background-color: rgba(16, 185, 129, 0.28);
-  border-color: #10b981;
-  transform: translateY(-0.5px);
-}
-
-.theme-dark .refactor-clause-chip {
-  color: #6ee7b7;
-  background-color: rgba(16, 185, 129, 0.2);
-  border-color: rgba(16, 185, 129, 0.5);
-}
-
 .refactor-copilot-action-row {
   display: flex;
   justify-content: flex-end;
@@ -679,87 +633,10 @@
   background-color: var(--background-modifier-hover);
 }
 
-/* 仅采纳半句：引导与智能拼接卡片 */
-.refactor-copilot-selection-guide {
-  font-size: 11px;
+.refactor-copilot-copy-hint {
   color: var(--text-muted);
-  line-height: 1.5;
-  padding: 6px 10px;
-  background-color: rgba(99, 102, 241, 0.05);
-  border-radius: 6px;
-  border: 1px dashed rgba(99, 102, 241, 0.35);
+  font-size: var(--font-ui-small);
 }
-
-.refactor-partial-preview-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background-color: rgba(99, 102, 241, 0.07);
-  border: 1.5px solid var(--interactive-accent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  animation: refactor-popover-in 0.15s ease-out;
-}
-
-.theme-dark .refactor-partial-preview-card {
-  background-color: rgba(99, 102, 241, 0.14);
-  border-color: #818cf8;
-}
-
-.refactor-partial-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.refactor-partial-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--interactive-accent);
-}
-
-.refactor-partial-badge {
-  font-size: 10px;
-  font-weight: 500;
-  background-color: var(--interactive-accent);
-  color: var(--text-on-accent);
-  padding: 1px 6px;
-  border-radius: 10px;
-}
-
-.refactor-partial-body {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-normal);
-  padding: 8px 10px;
-  background-color: var(--background-primary);
-  border-radius: 6px;
-  border: 1px dashed var(--interactive-accent);
-  outline: none;
-  cursor: text;
-  word-break: break-word;
-}
-
-.refactor-partial-body:focus {
-  border-style: solid;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-}
-
-.refactor-partial-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.refactor-btn-partial-confirm {
-  background-color: var(--interactive-accent) !important;
-  color: var(--text-on-accent) !important;
-  font-weight: 600;
-}
-
 
 /* ================= 升级版交互：工具栏组、选区气泡与悬浮球 ================= */
 

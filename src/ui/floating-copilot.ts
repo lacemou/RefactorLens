@@ -78,6 +78,12 @@ export class FloatingCopilotManager {
 
   private registerSelectionListener() {
     this.selectionListener = (e: PointerEvent) => {
+      if (this.selectionPopoverEl?.contains(e.target as Node)) return;
+      const startView = this.app.workspace.getActiveViewOfType(MarkdownView);
+      const initialCm = (startView?.editor as (Editor & { cm?: EditorView }) | undefined)?.cm;
+      const initialSelection = initialCm?.contentDOM.ownerDocument.getSelection();
+      // CodeMirror may normalize a boundary selection on its next update.
+      const initialDeleted = initialCm && initialSelection ? readDeletedSelection(initialCm, initialSelection) : null;
       window.setTimeout(() => {
         // 如果当前有模态弹窗正在显示，绝对禁止浮现选区气泡！
         if (
@@ -97,13 +103,10 @@ export class FloatingCopilotManager {
 
         const editor = view.editor;
         const editorSel = editor.getSelection().trim();
-        const browserSelection = window.getSelection();
         const cm = (editor as Editor & { cm?: EditorView }).cm;
-        const deleted = cm && browserSelection ? readDeletedSelection(cm, browserSelection) : null;
-
-        if (this.selectionPopoverEl && this.selectionPopoverEl.contains(e.target as Node)) {
-          return;
-        }
+        const browserSelection = cm?.contentDOM.ownerDocument.getSelection();
+        const deleted = (cm && browserSelection ? readDeletedSelection(cm, browserSelection) : null) ??
+          (view === startView && cm === initialCm ? initialDeleted : null);
 
         if (deleted || editorSel) {
           this.showSelectionPopover(editor, view, deleted, e.clientX, e.clientY);

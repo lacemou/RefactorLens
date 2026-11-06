@@ -35,7 +35,7 @@ Move detection is heuristic. Always review its result before treating a paragrap
 - Select text and open the rewrite assistant from Obsidian.
 - Use a custom instruction or quick actions for a more natural, conversational, concise, or pain-point-focused rewrite.
 - Review multiple candidates before changing the note.
-- Accept a complete rewrite, merge a selected clause, discard it, or save the old sentence to the scratchpad.
+- Accept the entire rewrite, copy a selection from a suggestion to paste manually, or discard it.
 - Optionally include a short excerpt from a configured style benchmark.
 
 Choose a locally installed [OpenAI Codex CLI](https://github.com/openai/codex) or [DeepSeek Harness CLI](https://github.com/deepseek-ai/deepseek-harness) in the plugin settings. Enter a model ID supported by your account or route, or leave it blank to use the CLI's configuration. For Harness, a model override can also specify a configured provider ID; the default route for an override is `deepseek-official`. The plugin does not ask for API keys. Configure authentication in your chosen CLI; the standard Harness headless profile does not reuse GUI sign-in.
@@ -51,7 +51,7 @@ Choose a locally installed [OpenAI Codex CLI](https://github.com/openai/codex) o
 RefactorLens has no telemetry or analytics.
 
 - The plugin does not read or store CLI credential files.
-- The plugin does not access the system clipboard.
+- The plugin writes to the system clipboard only when you click **Copy selected text** in the rewrite panel. It does not read the clipboard.
 - Without AI rewriting, note comparison and scratchpad operations stay inside Obsidian and the local vault.
 - The baseline picker enumerates Markdown file paths in the current vault only when you open it, so it can present files available for comparison.
 - When you request a rewrite, the selected text, instruction and up to 500 characters from an optional style benchmark go to the selected CLI, which may send them to its configured provider or gateway.
@@ -168,7 +168,7 @@ Please avoid including private note content, credentials, or personal paths in a
 - 选中文字后在 Obsidian 内呼出改写顾问。
 - 输入自定义要求，或使用自然化、口语化、精炼、加深现实痛点等快捷指令。
 - 修改正文前先查看多个候选结果。
-- 支持整句采纳、融合所选半句、放弃修改，或把旧句存入灵感抽屉。
+- 可采纳整句、复制选中的候选文字后自行粘贴，或放弃改写。
 - 可选择读取文风标杆文件的一小段内容作为参考。
 
 可在设置中选择本机已安装的 [OpenAI Codex CLI](https://github.com/openai/codex) 或 [DeepSeek Harness CLI](https://github.com/deepseek-ai/deepseek-harness)，并填写账号或网关支持的模型 ID。留空时沿用 CLI 配置。为 Harness 指定模型时可同时填写提供方 ID，留空使用 `deepseek-official`。认证在对应 CLI 中配置；标准 Harness headless 配置不会复用图形界面登录。
@@ -184,7 +184,7 @@ Please avoid including private note content, credentials, or personal paths in a
 RefactorLens 不包含遥测或数据分析。
 
 - 插件不读取、不保存 CLI 凭据文件。
-- 插件不访问系统剪贴板。
+- 只有点击改写面板的「复制所选文字」时才写入系统剪贴板；插件不读取剪贴板。
 - 不使用 AI 改写时，文稿比对和灵感暂存只在 Obsidian 与本地 Vault 内进行。
 - 仅当你打开底稿选择器时，插件会枚举当前 Vault 内的 Markdown 文件路径，用于列出可选底稿。
 - 发起改写时，选中文字、指令和可选文风标杆的前 500 个字符会传给所选 CLI，由它按自身配置发送给模型提供方或网关。

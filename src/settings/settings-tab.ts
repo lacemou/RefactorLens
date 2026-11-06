@@ -153,11 +153,11 @@ export class RefactorLensSettingTab extends PluginSettingTab {
           },
           {
             name: "行内改写",
-            desc: "划选文字后呼出改写顾问，可整句或分句采纳，并可备份旧句。",
+            desc: "划选文字后呼出改写顾问，可采纳整句、复制所选候选文字，或放弃。",
           },
           {
             name: "快捷键",
-            desc: "插件不预设全局快捷键。请前往 Obsidian 设置 → 快捷键，搜索 Refactor Lens 后自行绑定。改写面板内可用 Enter 确认、Esc 退出。",
+            desc: "插件不预设全局快捷键。请前往 Obsidian 设置 → 快捷键，搜索 Refactor Lens 后自行绑定。改写面板可按 Esc 退出。",
           },
         ],
       },

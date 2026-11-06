@@ -22,7 +22,7 @@ export default class RefactorLensPlugin extends Plugin {
 
   private activeBaselines: Map<string, TFile | null> = new Map();
   private sessionSnapshots: Map<string, string> = new Map();
-  private pillViews: Map<string, BaselinePillView> = new Map();
+  private pillViews = new Map<MarkdownView, { header: HTMLElement; file: TFile; pill: BaselinePillView }>();
 
   async onload() {
     await this.loadSettings();
@@ -156,6 +156,21 @@ export default class RefactorLensPlugin extends Plugin {
         this.handleActiveLeafChange(leaf);
       })
     );
+    // Opening a different note can reuse the current leaf and editor.
+    this.registerEvent(this.app.workspace.on("file-open", (file) => {
+      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (file && view?.file === file) this.handleActiveLeafChange(view.leaf);
+      else if (!file) this.floatingCopilot?.attachToView(null);
+    }));
+    this.registerEvent(this.app.workspace.on("layout-change", () => {
+      const views = new Set(this.app.workspace.getLeavesOfType("markdown").map((leaf) => leaf.view));
+      for (const [view, { pill }] of this.pillViews) {
+        if (!views.has(view)) {
+          pill.destroy();
+          this.pillViews.delete(view);
+        }
+      }
+    }));
 
     // 10. 编辑变更监听
     this.registerEvent(
@@ -175,7 +190,7 @@ export default class RefactorLensPlugin extends Plugin {
   }
 
   onunload() {
-    for (const pill of this.pillViews.values()) {
+    for (const { pill } of this.pillViews.values()) {
       pill.destroy();
     }
     this.pillViews.clear();
@@ -236,6 +251,11 @@ export default class RefactorLensPlugin extends Plugin {
   }
 
   public async openCopilotModal(editor: Editor, view: MarkdownView) {
+    const sourceFile = view.file;
+    const from = editor.getCursor("from");
+    const to = editor.getCursor("to");
+    const original = editor.getRange(from, to);
+    const isSourceCurrent = () => view.file === sourceFile && view.editor === editor && editor.getRange(from, to) === original;
     let styleContext = "";
     if (this.settings.benchmarkVaultPath) {
       const p = this.settings.benchmarkVaultPath;
@@ -261,13 +281,17 @@ export default class RefactorLensPlugin extends Plugin {
       }
     }
 
+    if (!isSourceCurrent()) {
+      new Notice("原选区已变化，请重新选择要改写的文字。");
+      return;
+    }
     this.floatingCopilot?.setModalActive(true);
 
     new InPlaceCopilotModal({
       app: this.app,
       editor,
       codexEngine: this.codexEngine,
-      scratchpadManager: this.scratchpadManager,
+      source: { from, to, original, isCurrent: isSourceCurrent },
       styleContext,
       onCloseCallback: () => {
         this.floatingCopilot?.setModalActive(false);
@@ -295,43 +319,39 @@ export default class RefactorLensPlugin extends Plugin {
     }
 
     this.floatingCopilot?.attachToView(view);
-    const fileKey = view.file.path;
-
-    if (!this.pillViews.has(fileKey)) {
-      const headerEl = view.containerEl.querySelector(".view-header");
-      if (headerEl) {
-        const pillView = new BaselinePillView(headerEl as HTMLElement, this.app, {
-          onSelectBaseline: (baselineFile) => {
-            void this.setBaselineForView(view, baselineFile);
-          },
-          getCurrentBaseline: () => {
-            return this.activeBaselines.get(fileKey) || null;
-          },
-          getCurrentFile: () => {
-            return view.file;
-          },
-          onOpenScratchpad: () => {
-            void this.activateScratchpadView();
-          },
-          getScratchpadCount: async () => {
-            const items = await this.scratchpadManager.getItems(view.file?.path);
-            return items.length;
-          },
-          onOpenCopilot: () => {
-            void this.openCopilotModal(view.editor, view);
-          },
-          onOpenSettings: () => {
-            new Notice("请打开 Obsidian 设置 → 第三方插件 → Refactor Lens。");
-          },
-        });
-        this.pillViews.set(fileKey, pillView);
-
-        const existingBaseline = this.activeBaselines.get(fileKey);
-        if (existingBaseline) {
-          void this.refreshDiffForView(view);
-        }
-      }
+    const file = view.file;
+    const header = view.containerEl.querySelector<HTMLElement>(".view-header");
+    const existing = this.pillViews.get(view);
+    if (header && (existing?.header !== header || existing.file !== file)) {
+      existing?.pill.destroy();
+      const pill = new BaselinePillView(header, this.app, {
+        onSelectBaseline: (baselineFile) => {
+          if (view.file === file) void this.setBaselineForView(view, baselineFile);
+        },
+        getCurrentBaseline: () => {
+          return view.file === file ? this.activeBaselines.get(file.path) || null : null;
+        },
+        getCurrentFile: () => {
+          return view.file;
+        },
+        onOpenScratchpad: () => {
+          void this.activateScratchpadView();
+        },
+        getScratchpadCount: async () => {
+          const items = await this.scratchpadManager.getItems(view.file?.path);
+          return items.length;
+        },
+        onOpenCopilot: () => {
+          void this.openCopilotModal(view.editor, view);
+        },
+        onOpenSettings: () => {
+          new Notice("请打开 Obsidian 设置 → 第三方插件 → Refactor Lens。");
+        },
+      });
+      this.pillViews.set(view, { header, file, pill });
+      pill.updatePillText(this.activeBaselines.get(file.path) ?? null);
     }
+    void this.refreshDiffForView(view);
   }
 
   private toggleLensForActiveView(view: MarkdownView) {
@@ -363,7 +383,7 @@ export default class RefactorLensPlugin extends Plugin {
       new Notice("修订透镜已关闭 (恢复正常纯净编辑)");
     }
 
-    const pill = this.pillViews.get(fileKey);
+    const pill = this.pillViews.get(view)?.pill;
     if (pill) {
       pill.updatePillText(baselineFile);
     }
@@ -375,7 +395,6 @@ export default class RefactorLensPlugin extends Plugin {
     if (!view.file) return;
     const fileKey = view.file.path;
     const baselineFile = this.activeBaselines.get(fileKey);
-    const pill = this.pillViews.get(fileKey);
 
     const cmView = this.getCM6View(view);
     if (!cmView) return;
@@ -387,7 +406,7 @@ export default class RefactorLensPlugin extends Plugin {
           movedPairs: [],
         }),
       });
-      if (pill) pill.updatePillText(null);
+      this.pillViews.get(view)?.pill.updatePillText(null);
       return;
     }
 
@@ -413,9 +432,7 @@ export default class RefactorLensPlugin extends Plugin {
         }),
       });
 
-      if (pill) {
-        pill.updatePillText(baselineFile, diffResult.refactorRatio);
-      }
+      this.pillViews.get(view)?.pill.updatePillText(baselineFile, diffResult.refactorRatio);
     } catch (err) {
       console.error("RefactorLens 比对刷新失败:", err);
     }
