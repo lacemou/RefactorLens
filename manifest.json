@@ -1,7 +1,7 @@
 {
   "id": "refactor-lens",
   "name": "Refactor Lens",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "minAppVersion": "1.13.0",
   "description": "Compare Markdown drafts inline, restore deleted text, track moved paragraphs, save ideas, and rewrite with Codex CLI or DeepSeek Harness (dsh).",
   "author": "YJ",

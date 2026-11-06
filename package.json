@@ -1,6 +1,6 @@
 {
   "name": "obsidian-refactor-lens",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "RefactorLens Obsidian Plugin - Word-style Track Changes & Codex In-place Assistant",
   "main": "main.js",
   "scripts": {
