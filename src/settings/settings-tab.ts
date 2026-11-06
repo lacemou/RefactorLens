@@ -126,16 +126,16 @@ export class RefactorLensSettingTab extends PluginSettingTab {
           },
           {
             name: "当前引擎状态",
-            desc: "检查当前选择的本地 CLI；不会发送文稿或测试模型调用。",
+            desc: "检查当前选择的本地 CLI 能否启动；不会检查登录、发送文稿或调用模型。",
             render: (setting) => {
               setting
                 .addButton((button) =>
                   button
-                    .setButtonText("测试连接")
+                    .setButtonText("检测 CLI")
                     .setCta()
                     .onClick(() => {
                       button.setDisabled(true);
-                      void this.testConnection(setting).catch(() => {
+                      void this.checkCli(setting).catch(() => {
                         setting.setDesc("CLI 检查未能完成。请在系统终端运行 CLI 的 --version 命令，再重试。");
                       }).finally(() => button.setDisabled(false));
                     })
@@ -181,7 +181,7 @@ export class RefactorLensSettingTab extends PluginSettingTab {
     }
   }
 
-  private async testConnection(setting: Setting): Promise<void> {
+  private async checkCli(setting: Setting): Promise<void> {
     const settings = { ...this.plugin.settings };
     const model = this.plugin.codexEngine.describeModel();
     setting.setDesc(`正在检查 ${model}…`);
@@ -204,21 +204,6 @@ export class RefactorLensSettingTab extends PluginSettingTab {
       }
       return;
     }
-    setting.setDesc(`已找到 Codex CLI（${detect.version}），正在检查登录状态…`);
-    const loginStatus = await this.plugin.codexEngine.checkLoginStatus(detect.path);
-    switch (loginStatus) {
-      case "ready":
-        setting.setDesc(`✅ 已找到 ${model}（${detect.version}），认证已配置。此检查未调用模型。`);
-        break;
-      case "signed-out":
-        setting.setDesc(`已找到 Codex CLI（${detect.version}），当前未登录。请在系统终端运行 \`codex login\`。`);
-        break;
-      case "timeout":
-      case "unavailable": {
-        const reason = loginStatus === "timeout" ? "检查超时" : "无法确认";
-        setting.setDesc(`已找到 Codex CLI（${detect.version}），但登录状态${reason}。可直接试一次改写，或在系统终端运行 \`codex login status\`。`);
-        break;
-      }
-    }
+    setting.setDesc(`已找到 Codex CLI（${detect.version}），可以启动。此处未检查登录；如需确认，请在系统终端运行 \`codex login status\`。`);
   }
 }

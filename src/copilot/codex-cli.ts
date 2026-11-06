@@ -7,7 +7,6 @@ import { clearTimeout as clearProbeTimeout, setTimeout as setProbeTimeout } from
 
 type CliDetection = { available: true; path: string; version: string } |
   { available: false; path: string; reason: "missing" | "directory" | "dependency" | "launch" | "wrapper" | "timeout" };
-type CodexLoginStatus = "ready" | "signed-out" | "unavailable" | "timeout";
 
 export interface CodexRewriteOptions {
   originalText: string;
@@ -143,16 +142,6 @@ export class CodexCliEngine {
       case "launch": return "已找到 CLI，但无法启动。请在终端运行 --version 检查程序和 Node.js。";
       case "missing": return "找不到 CLI 可执行文件，请检查安装或填写程序的绝对路径。";
     }
-  }
-
-  public async checkLoginStatus(bin: string): Promise<CodexLoginStatus> {
-    // 只通过 CLI 查询状态，不直接读取 Codex 的凭据文件。
-    const result = await this.probeCli(bin, ["login", "status"], 4000);
-    if (result === null) return "timeout";
-    const out = `${result.stdout}\n${result.stderr}`.trim();
-    if (/^\s*Not logged in\s*$/im.test(out)) return "signed-out";
-    if (!result.error && /^\s*(?:Logged in\b|API key configured\b)/im.test(out)) return "ready";
-    return "unavailable";
   }
 
   public async checkHarnessHeadless(bin: string): Promise<"ready" | "outdated" | "unavailable"> {

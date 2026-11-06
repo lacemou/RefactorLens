@@ -513,7 +513,6 @@ async function testWindowsCliDetection() {
     "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
   let stalled = false;
   let killed = false;
-  let signedOut = false;
   const otherExecutable = path.win32.join(prefix, "codex.exe");
   const calls = [];
   const { CodexCliEngine } = loadPluginSource("copilot/codex-cli.ts", {
@@ -534,8 +533,7 @@ async function testWindowsCliDetection() {
             end() {
               if (!stalled) queueMicrotask(() => {
                 if (args[0] === "--version") callback(null, "codex-cli 0.1.0", "");
-                else if (signedOut) callback({ code: 1 }, "", "Not logged in");
-                else callback(null, "", "Logged in using ChatGPT");
+                else throw new Error("CLI detection must not launch the login flow");
               });
             },
           },
@@ -551,18 +549,38 @@ async function testWindowsCliDetection() {
   assert("Windows npm 安装优先选择已定位的原生程序",
     found.available && found.path === executable && calls[0]?.[0] === executable);
   const fromWrapper = await engine.detectCli({ ...settings, codexCliPath: path.win32.join(prefix, "codex.cmd") });
-  assert("Codex 的 npm 启动脚本会定位到原生程序，且登录检查使用同一个程序",
+  assert("Codex 的 npm 启动脚本会定位到原生程序",
     fromWrapper.available && fromWrapper.path === executable &&
-    await engine.checkLoginStatus(executable) === "ready" &&
     calls.every(([bin]) => !bin.endsWith(".cmd")));
   const unsupported = await engine.detectCli({ ...settings, codexCliPath: "C:\\test\\unrecognized.cmd" });
   assert("任意 Windows 脚本不会执行", !unsupported.available && unsupported.reason === "wrapper");
-  signedOut = true;
-  assert("未登录不会误报为已登录", await engine.checkLoginStatus(executable) === "signed-out");
+  const { RefactorLensSettingTab } = loadPluginSource("settings/settings-tab.ts", {}, (id) =>
+    id === "obsidian" ? { PluginSettingTab: class {} } : require(id)
+  );
+  const tab = new RefactorLensSettingTab({}, { settings, codexEngine: engine });
+  const definition = tab.getSettingDefinitions().flatMap((group) => group.items ?? [])
+    .find((item) => item.name === "当前引擎状态");
+  let click;
+  let disabled = false;
+  let desc = "";
+  const button = {
+    setButtonText() { return this; },
+    setCta() { return this; },
+    onClick(callback) { click = callback; return this; },
+    setDisabled(value) { disabled = value; return this; },
+  };
+  definition.render({
+    addButton(render) { render(button); return this; },
+    setDesc(text) { desc = text; return this; },
+  });
+  const commandsBefore = calls.length;
+  click();
+  await new Promise(setImmediate);
+  assert("留空路径点击检测后，只执行版本检查、显示最终结果并恢复按钮",
+    !disabled && desc.includes("可以启动") && desc.includes("未检查登录") &&
+    calls.length === commandsBefore + 1 && calls.at(-1)[0] === executable && calls.at(-1)[1] === "--version");
+
   stalled = true;
-  assert("登录检查不依赖窗口计时器，子进程没有回调时仍返回超时并结束进程",
-    await engine.checkLoginStatus(executable) === "timeout" && killed);
-  killed = false;
   const timeout = await engine.detectCli({ ...settings, codexCliPath: executable });
   assert("子进程没有回调时，版本检查仍结束并返回超时",
     !timeout.available && timeout.reason === "timeout" && killed);

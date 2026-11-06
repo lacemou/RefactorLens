@@ -46,7 +46,7 @@ AI rewriting is optional. Draft comparison, restoration, and the scratchpad work
 
 Leave the executable path blank for auto-detection. If it fails, enter the absolute path to the executable **file**, rather than its installation folder or an entire shell command. On macOS, `command -v codex` or `command -v dsh` can help locate it. A variable exported only in a terminal shell may not be available to Obsidian when launched from the Dock. Refactor Lens starts `dsh` from a private temporary directory, so a vault-local `.env` is not used as its working-directory configuration.
 
-Open the header pill menu to see the selected CLI's detection status beside the rewrite assistant. **Test connection** (测试连接) in plugin settings checks Codex sign-in status or whether Harness headless supports the required flags. Neither check sends note text or verifies that a model request will succeed. If Harness is detected but cannot run, check `dsh --version` and `dsh --profile headless --help`; the latter must list both `--permission-mode` and `--approval-policy`.
+Open the header pill menu to see the selected CLI's detection status beside the rewrite assistant. **Check CLI** (检测 CLI) in plugin settings confirms that Codex starts, or that Harness headless supports the required flags. It does not send note text, check sign-in, or call a model. To check Codex sign-in separately, run `codex login status` in your terminal. If Harness is detected but cannot run, check `dsh --version` and `dsh --profile headless --help`; the latter must list both `--permission-mode` and `--approval-policy`.
 
 On Windows, run `where.exe codex` and `codex --version` in PowerShell. If automatic detection fails, enter the full path to the native `codex.exe` in plugin settings. The plugin can resolve standard npm installations to their native executable without running the `codex.cmd` script.
 
@@ -193,7 +193,7 @@ AI 改写是可选功能。稿件比对、文字恢复和灵感抽屉都不需�
 
 Windows 上可在 PowerShell 运行 `where.exe codex` 和 `codex --version`。如果自动探测失败，请在设置里填写原生 `codex.exe` 的绝对路径。对于标准 npm 安装，插件可以定位原生程序，无需执行 `codex.cmd` 脚本。
 
-顶部修订透镜药丸的「呼出改写顾问」旁显示所选 CLI 的检测状态。设置里的「测试连接」进一步检查 Codex 登录状态，或 Harness headless 是否支持所需参数；两处检查都不发送文稿，也不代表模型调用一定能成功。如果检测到 Harness 但改写失败，先运行 `dsh --version` 和 `dsh --profile headless --help`，确认后者列出了 `--permission-mode` 和 `--approval-policy`。
+顶部修订透镜药丸的「呼出改写顾问」旁显示所选 CLI 的检测状态。设置里的「检测 CLI」确认 Codex 能否启动，或检查 Harness headless 是否支持所需参数；它不会发送文稿、检查登录或调用模型。要查看 Codex 登录状态，请在终端运行 `codex login status`。如果检测到 Harness 但改写失败，先运行 `dsh --version` 和 `dsh --profile headless --help`，确认后者列出了 `--permission-mode` 和 `--approval-policy`。
 
 ### 灵感暂存抽屉
 
