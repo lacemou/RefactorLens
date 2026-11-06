@@ -5,8 +5,9 @@ import * as os from "os";
 import * as fs from "fs";
 import { clearTimeout as clearProbeTimeout, setTimeout as setProbeTimeout } from "timers";
 
-type CliDetection = { available: true; path: string; version: string } |
-  { available: false; path: string; reason: "missing" | "directory" | "dependency" | "launch" | "wrapper" | "timeout" };
+type CliFailure = { available: false; path: string; reason: "missing" | "directory" | "dependency" | "launch" | "wrapper" | "timeout" | "relative" };
+type CliLocation = { available: true; path: string } | CliFailure;
+type CliDetection = { available: true; path: string; version: string } | CliFailure;
 
 export interface CodexRewriteOptions {
   originalText: string;
@@ -57,64 +58,70 @@ export class CodexCliEngine {
     return env;
   }
 
-  public async detectCli(settings = this.settings): Promise<CliDetection> {
+  public locateCli(settings = this.settings): CliLocation {
+    const candidates = this.locateCliCandidates(settings);
+    return candidates.next().value;
+  }
+
+  private *locateCliCandidates(settings: RewriteCliSettings): Generator<{ available: true; path: string }, CliFailure> {
     const isWin = os.platform() === "win32";
-    const home = os.homedir();
 
     const deepseek = settings.rewriteBackend === "deepseek";
     const name = deepseek ? "dsh" : "codex";
     const custom = (deepseek ? settings.deepseekCliPath : settings.codexCliPath).trim().replace(/^"([^"]+)"$/, "$1");
     const wrapper = isWin && /\.(?:cmd|bat|ps1)$/i.test(custom);
-    const candidates = isWin ? this.windowsCandidates(name, custom, wrapper) : custom ? [custom] : [
-      path.join(home, "Library/pnpm/bin", name),
-      path.join(home, ".npm-global/bin", name),
-      `/opt/homebrew/bin/${name}`,
-      `/usr/local/bin/${name}`,
-      path.join(home, ".local/bin", name),
-      name,
-    ];
+    if (custom && !path.isAbsolute(custom)) return { available: false, path: custom, reason: "relative" };
+    const candidates = isWin ? this.windowsCandidates(name, custom, wrapper) : custom ? [custom] :
+      (this.getEnhancedEnv().PATH ?? "").split(":").filter((entry) => path.isAbsolute(entry))
+        .map((entry) => path.join(entry, name));
 
-    let failure: CliDetection = { available: false, path: custom, reason: wrapper ? "wrapper" : "missing" };
-    for (const cand of candidates) {
-      if (path.isAbsolute(cand)) {
-        let stat: fs.Stats | undefined;
-        try {
-          stat = fs.statSync(cand, { throwIfNoEntry: false });
-        } catch {
-          if (custom && !wrapper) return { available: false, path: cand, reason: "launch" };
-          continue;
-        }
+    for (const cand of new Set(candidates)) {
+      try {
+        const stat = fs.statSync(cand, { throwIfNoEntry: false });
         if (!stat) continue;
         if (stat.isDirectory()) {
           if (custom && !wrapper) return { available: false, path: cand, reason: "directory" };
           continue;
         }
+        if (!stat.isFile()) continue;
+        if (!isWin) fs.accessSync(cand, fs.constants.X_OK);
+      } catch {
+        if (custom && !wrapper) return { available: false, path: cand, reason: "launch" };
+        continue;
       }
+      yield { available: true, path: cand };
+    }
+    return { available: false, path: custom, reason: wrapper ? "wrapper" : "missing" };
+  }
 
-      const result = await this.checkExecutable(cand);
+  public async detectCli(settings = this.settings): Promise<CliDetection> {
+    const candidates = this.locateCliCandidates(settings);
+    let failure: CliFailure | undefined;
+    let next = candidates.next();
+    while (!next.done) {
+      const result = await this.checkExecutable(next.value.path);
       if (result.available === true) return result;
       if (result.reason === "timeout") return result;
-      if (result.reason !== "missing" && failure.reason === "missing") failure = result;
+      if (result.reason !== "missing") failure ??= result;
+      next = candidates.next();
     }
-
-    return failure;
+    return failure ?? next.value;
   }
 
   private windowsCandidates(name: string, custom: string, wrapper: boolean): string[] {
     if (custom && !wrapper) return [custom];
-    if (name !== "codex" || (custom && (!path.isAbsolute(custom) || !/^codex\.(?:cmd|ps1)$/i.test(path.basename(custom))))) {
-      return custom ? [] : [`${name}.exe`];
-    }
-
     const appData = process.env.APPDATA;
     const pathValue = Object.entries(process.env).find(([key]) => key.toLowerCase() === "path")?.[1] ?? "";
     const prefixes = custom ? [path.dirname(custom)] : [
       ...pathValue.split(";").map((entry) => entry.trim().replace(/^"([^"]+)"$/, "$1")),
       ...(appData ? [path.join(appData, "npm")] : []),
     ];
+    const absolutePrefixes = [...new Set(prefixes.filter((entry) => path.isAbsolute(entry)))];
+    if (name !== "codex" || (custom && !/^codex\.(?:cmd|ps1)$/i.test(path.basename(custom)))) {
+      return custom ? [] : absolutePrefixes.map((prefix) => path.join(prefix, `${name}.exe`));
+    }
     const arch = os.arch();
     const triple = arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
-    const absolutePrefixes = [...new Set(prefixes.filter((entry) => path.isAbsolute(entry)))];
     const candidates: string[] = [];
     for (const prefix of absolutePrefixes) {
       const packages = path.join(prefix, "node_modules", "@openai");
@@ -135,6 +142,7 @@ export class CodexCliEngine {
 
   public describeCliFailure(result: Extract<CliDetection, { available: false }>): string {
     switch (result.reason) {
+      case "relative": return "请填写 CLI 可执行文件的绝对路径，或留空自动查找。";
       case "wrapper": return "无法直接运行 Windows 命令脚本。请填写 CLI 原生 .exe 文件的绝对路径。";
       case "timeout": return "CLI 版本检查超时。请在系统终端运行 --version 检查。";
       case "directory": return "这里需要 CLI 可执行文件的绝对路径，不能填写安装目录。";
@@ -142,12 +150,6 @@ export class CodexCliEngine {
       case "launch": return "已找到 CLI，但无法启动。请在终端运行 --version 检查程序和 Node.js。";
       case "missing": return "找不到 CLI 可执行文件，请检查安装或填写程序的绝对路径。";
     }
-  }
-
-  public async checkHarnessHeadless(bin: string): Promise<"ready" | "outdated" | "unavailable"> {
-    const result = await this.probeCli(bin, ["--profile", "headless", "--help"], 8000);
-    if (result === null || result.error) return "unavailable";
-    return result.stdout.includes("--permission-mode") && result.stdout.includes("--approval-policy") ? "ready" : "outdated";
   }
 
   private async checkExecutable(bin: string): Promise<CliDetection> {

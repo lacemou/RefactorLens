@@ -126,7 +126,7 @@ export class RefactorLensSettingTab extends PluginSettingTab {
           },
           {
             name: "当前引擎状态",
-            desc: "检查当前选择的本地 CLI 能否启动；不会检查登录、发送文稿或调用模型。",
+            desc: "查找当前选择的本地 CLI 可执行文件。",
             render: (setting) => {
               setting
                 .addButton((button) =>
@@ -134,10 +134,11 @@ export class RefactorLensSettingTab extends PluginSettingTab {
                     .setButtonText("检测 CLI")
                     .setCta()
                     .onClick(() => {
-                      button.setDisabled(true);
-                      void this.checkCli(setting).catch(() => {
+                      try {
+                        this.checkCli(setting);
+                      } catch {
                         setting.setDesc("CLI 检查未能完成。请在系统终端运行 CLI 的 --version 命令，再重试。");
-                      }).finally(() => button.setDisabled(false));
+                      }
                     })
                 );
             },
@@ -181,29 +182,16 @@ export class RefactorLensSettingTab extends PluginSettingTab {
     }
   }
 
-  private async checkCli(setting: Setting): Promise<void> {
+  private checkCli(setting: Setting): void {
     const settings = { ...this.plugin.settings };
     const model = this.plugin.codexEngine.describeModel();
-    setting.setDesc(`正在检查 ${model}…`);
-    const detect = await this.plugin.codexEngine.detectCli(settings);
+    const detect = this.plugin.codexEngine.locateCli(settings);
 
     if (detect.available === false) {
       setting.setDesc(`${model}：${this.plugin.codexEngine.describeCliFailure(detect)}`);
       return;
     }
 
-    if (settings.rewriteBackend === "deepseek") {
-      setting.setDesc("已找到 CLI，正在检查无界面模式…");
-      const status = await this.plugin.codexEngine.checkHarnessHeadless(detect.path);
-      if (status === "ready") {
-        setting.setDesc(`已检测到 ${model}（${detect.version}），headless 模式就绪。此检查未调用模型。`);
-      } else {
-        setting.setDesc(status === "outdated"
-          ? "Harness 版本过旧，缺少只读运行参数，请升级。"
-          : "CLI 可启动，但 headless 模式未就绪。请在终端运行 dsh --profile headless --help 检查。");
-      }
-      return;
-    }
-    setting.setDesc(`已找到 Codex CLI（${detect.version}），可以启动。此处未检查登录；如需确认，请在系统终端运行 \`codex login status\`。`);
+    setting.setDesc(`已找到 ${model} 的可执行文件。实际改写时会启动并检查 CLI。`);
   }
 }

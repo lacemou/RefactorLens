@@ -522,7 +522,8 @@ async function testWindowsCliDetection() {
     if (id === "path") return path.win32;
     if (id === "timers") return { setTimeout: (callback) => setTimeout(callback, 20), clearTimeout };
     if (id === "fs") return {
-      statSync: (file) => [executable, otherExecutable].includes(file) ? { isDirectory: () => false } : undefined,
+      statSync: (file) => [executable, otherExecutable].includes(file)
+        ? { isDirectory: () => false, isFile: () => true } : undefined,
     };
     if (id === "child_process") return {
       execFile(bin, args, _options, callback) {
@@ -561,26 +562,22 @@ async function testWindowsCliDetection() {
   const definition = tab.getSettingDefinitions().flatMap((group) => group.items ?? [])
     .find((item) => item.name === "当前引擎状态");
   let click;
-  let disabled = false;
   let desc = "";
   const button = {
     setButtonText() { return this; },
     setCta() { return this; },
     onClick(callback) { click = callback; return this; },
-    setDisabled(value) { disabled = value; return this; },
   };
   definition.render({
     addButton(render) { render(button); return this; },
     setDesc(text) { desc = text; return this; },
   });
   const commandsBefore = calls.length;
-  click();
-  await new Promise(setImmediate);
-  assert("留空路径点击检测后，只执行版本检查、显示最终结果并恢复按钮",
-    !disabled && desc.includes("可以启动") && desc.includes("未检查登录") &&
-    calls.length === commandsBefore + 1 && calls.at(-1)[0] === executable && calls.at(-1)[1] === "--version");
-
   stalled = true;
+  click();
+  assert("留空路径点击检测时立即显示文件结果，完全不启动子进程",
+    desc.includes("已找到") && desc.includes("可执行文件") && calls.length === commandsBefore);
+
   const timeout = await engine.detectCli({ ...settings, codexCliPath: executable });
   assert("子进程没有回调时，版本检查仍结束并返回超时",
     !timeout.available && timeout.reason === "timeout" && killed);
