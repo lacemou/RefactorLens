@@ -513,21 +513,34 @@ async function testWindowsCliDetection() {
     "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
   let stalled = false;
   let killed = false;
+  let signedOut = false;
+  const otherExecutable = path.win32.join(prefix, "codex.exe");
   const calls = [];
   const { CodexCliEngine } = loadPluginSource("copilot/codex-cli.ts", {
     process: { env: { APPDATA: path.win32.dirname(prefix), Path: prefix } },
-    window: { setTimeout: (callback) => setTimeout(callback, 20), clearTimeout },
   }, (id) => {
     if (id === "os") return { platform: () => "win32", homedir: () => "C:\\Users\\Writer", arch: () => "x64" };
     if (id === "path") return path.win32;
-    if (id === "fs") return { statSync: (file) => file === executable ? { isDirectory: () => false } : undefined };
+    if (id === "timers") return { setTimeout: (callback) => setTimeout(callback, 20), clearTimeout };
+    if (id === "fs") return {
+      statSync: (file) => [executable, otherExecutable].includes(file) ? { isDirectory: () => false } : undefined,
+    };
     if (id === "child_process") return {
       execFile(bin, args, _options, callback) {
         calls.push([bin, ...args]);
-        if (!stalled) queueMicrotask(() => bin !== executable
-          ? callback({ code: "ENOENT" }, "", "")
-          : callback(null, args[0] === "--version" ? "codex-cli 0.1.0" : "Logged in using ChatGPT", ""));
-        return { kill() { killed = true; } };
+        return {
+          stdin: {
+            on() {},
+            end() {
+              if (!stalled) queueMicrotask(() => {
+                if (args[0] === "--version") callback(null, "codex-cli 0.1.0", "");
+                else if (signedOut) callback({ code: 1 }, "", "Not logged in");
+                else callback(null, "", "Logged in using ChatGPT");
+              });
+            },
+          },
+          kill() { killed = true; },
+        };
       },
     };
     return require(id);
@@ -535,15 +548,21 @@ async function testWindowsCliDetection() {
   const settings = { rewriteBackend: "codex", codexCliPath: "", codexModel: "", deepseekCliPath: "", deepseekProvider: "", deepseekModel: "" };
   const engine = new CodexCliEngine(settings);
   const found = await engine.detectCli();
-  assert("Windows npm 安装能找到原生 Codex 程序", found.available && found.path === executable);
+  assert("Windows npm 安装优先选择已定位的原生程序",
+    found.available && found.path === executable && calls[0]?.[0] === executable);
   const fromWrapper = await engine.detectCli({ ...settings, codexCliPath: path.win32.join(prefix, "codex.cmd") });
   assert("Codex 的 npm 启动脚本会定位到原生程序，且登录检查使用同一个程序",
     fromWrapper.available && fromWrapper.path === executable &&
-    await engine.checkLoginStatus(executable) === "Logged in using ChatGPT" &&
+    await engine.checkLoginStatus(executable) === "ready" &&
     calls.every(([bin]) => !bin.endsWith(".cmd")));
   const unsupported = await engine.detectCli({ ...settings, codexCliPath: "C:\\test\\unrecognized.cmd" });
   assert("任意 Windows 脚本不会执行", !unsupported.available && unsupported.reason === "wrapper");
+  signedOut = true;
+  assert("未登录不会误报为已登录", await engine.checkLoginStatus(executable) === "signed-out");
   stalled = true;
+  assert("登录检查不依赖窗口计时器，子进程没有回调时仍返回超时并结束进程",
+    await engine.checkLoginStatus(executable) === "timeout" && killed);
+  killed = false;
   const timeout = await engine.detectCli({ ...settings, codexCliPath: executable });
   assert("子进程没有回调时，版本检查仍结束并返回超时",
     !timeout.available && timeout.reason === "timeout" && killed);

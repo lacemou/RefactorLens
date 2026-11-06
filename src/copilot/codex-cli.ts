@@ -3,9 +3,11 @@ import type { Readable, Writable } from "stream";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
+import { clearTimeout as clearProbeTimeout, setTimeout as setProbeTimeout } from "timers";
 
 type CliDetection = { available: true; path: string; version: string } |
   { available: false; path: string; reason: "missing" | "directory" | "dependency" | "launch" | "wrapper" | "timeout" };
+type CodexLoginStatus = "ready" | "signed-out" | "unavailable" | "timeout";
 
 export interface CodexRewriteOptions {
   originalText: string;
@@ -113,8 +115,9 @@ export class CodexCliEngine {
     ];
     const arch = os.arch();
     const triple = arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
-    const candidates = custom ? [] : ["codex.exe"];
-    for (const prefix of new Set(prefixes.filter((entry) => path.isAbsolute(entry)))) {
+    const absolutePrefixes = [...new Set(prefixes.filter((entry) => path.isAbsolute(entry)))];
+    const candidates: string[] = [];
+    for (const prefix of absolutePrefixes) {
       const packages = path.join(prefix, "node_modules", "@openai");
       const platformPackage = `codex-win32-${arch}`;
       const roots = [
@@ -127,6 +130,7 @@ export class CodexCliEngine {
         candidates.push(path.join(root, "vendor", triple, "codex", "codex.exe"));
       }
     }
+    if (!custom) candidates.push(...absolutePrefixes.map((prefix) => path.join(prefix, "codex.exe")));
     return candidates;
   }
 
@@ -141,13 +145,14 @@ export class CodexCliEngine {
     }
   }
 
-  public async checkLoginStatus(bin: string): Promise<string | null> {
+  public async checkLoginStatus(bin: string): Promise<CodexLoginStatus> {
     // 只通过 CLI 查询状态，不直接读取 Codex 的凭据文件。
     const result = await this.probeCli(bin, ["login", "status"], 4000);
-    if (result === null) return null;
+    if (result === null) return "timeout";
     const out = `${result.stdout}\n${result.stderr}`.trim();
-    if (out.includes("Logged in using ChatGPT")) return "Logged in using ChatGPT";
-    return out || "未检测到登录状态";
+    if (/^\s*Not logged in\s*$/im.test(out)) return "signed-out";
+    if (!result.error && /^\s*(?:Logged in\b|API key configured\b)/im.test(out)) return "ready";
+    return "unavailable";
   }
 
   public async checkHarnessHeadless(bin: string): Promise<"ready" | "outdated" | "unavailable"> {
@@ -173,16 +178,18 @@ export class CodexCliEngine {
     Promise<{ error: ExecFileException | null; stdout: string; stderr: string } | null> {
     return new Promise((resolve) => {
       const child = execFile(bin, args, { env: this.getEnhancedEnv(), windowsHide: true }, (error, stdout, stderr) => {
-        window.clearTimeout(timer);
+        clearProbeTimeout(timer);
         resolve({ error, stdout, stderr });
       });
-      // Resolve at the deadline even if a wrapper or descendant keeps a pipe open.
-      const timer = window.setTimeout(() => {
+      // CLI probes must finish independently of the renderer window and the child's pipes.
+      const timer = setProbeTimeout(() => {
         resolve(null);
         child.stdout?.destroy();
         child.stderr?.destroy();
         try { child.kill(); } catch { /* The check has already timed out. */ }
       }, timeoutMs);
+      child.stdin?.on("error", () => { /* A fast exit can close the pipe first. */ });
+      child.stdin?.end();
     });
   }
 

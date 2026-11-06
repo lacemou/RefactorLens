@@ -204,19 +204,21 @@ export class RefactorLensSettingTab extends PluginSettingTab {
       }
       return;
     }
-    setting.setDesc("已找到 Codex CLI，正在检查登录状态…");
+    setting.setDesc(`已找到 Codex CLI（${detect.version}），正在检查登录状态…`);
     const loginStatus = await this.plugin.codexEngine.checkLoginStatus(detect.path);
-    if (loginStatus === null) {
-      setting.setDesc(`已找到 Codex CLI，但登录状态检查超时。请在系统终端运行 \`codex login status\`。`);
-      return;
-    }
-    const isLoggedIn = /chatgpt|logged in/i.test(loginStatus);
-    if (isLoggedIn) {
-      setting.setDesc(`✅ ${model}，登录状态：${loginStatus}。`);
-    } else {
-      setting.setDesc(
-        `⚠️ 已检测到 Codex CLI：${detect.path} (${detect.version || "版本未知"})，但登录状态为：${loginStatus}。请在系统终端执行 \`codex login\`。`
-      );
+    switch (loginStatus) {
+      case "ready":
+        setting.setDesc(`✅ 已找到 ${model}（${detect.version}），认证已配置。此检查未调用模型。`);
+        break;
+      case "signed-out":
+        setting.setDesc(`已找到 Codex CLI（${detect.version}），当前未登录。请在系统终端运行 \`codex login\`。`);
+        break;
+      case "timeout":
+      case "unavailable": {
+        const reason = loginStatus === "timeout" ? "检查超时" : "无法确认";
+        setting.setDesc(`已找到 Codex CLI（${detect.version}），但登录状态${reason}。可直接试一次改写，或在系统终端运行 \`codex login status\`。`);
+        break;
+      }
     }
   }
 }
