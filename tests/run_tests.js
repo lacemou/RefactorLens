@@ -506,6 +506,56 @@ console.log("=== 开始 RefactorLens 全栈强化测试 ===\n");
   assert("Harness 模型留空时保留用户本机模型路由", patch.length === 1);
 }
 
+// A drawer click can make the sidebar active while several document tabs are open.
+{
+  class MarkdownView {
+    constructor(file, editor, mode = "source") {
+      this.file = { path: file };
+      this.editor = editor;
+      this.mode = mode;
+    }
+    getMode() { return this.mode; }
+  }
+  const notices = [];
+  const { ScratchpadView } = loadPluginSource("scratchpad/scratchpad-view.ts", {}, (id) =>
+    id === "obsidian" ? { MarkdownView, ItemView: class {}, Modal: class {}, Notice: class {
+      constructor(message) { notices.push(message); }
+    } } : require(id)
+  );
+  let value = "第一行\n前后\n末行";
+  let caret;
+  let focused = false;
+  const editor = {
+    getCursor: () => ({ line: 1, ch: 1 }),
+    posToOffset: ({ line, ch }) => value.split("\n").slice(0, line).reduce((n, s) => n + s.length + 1, ch),
+    offsetToPos(offset) {
+      const lines = value.slice(0, offset).split("\n");
+      return { line: lines.length - 1, ch: lines.at(-1).length };
+    },
+    replaceRange(text, pos) {
+      const offset = this.posToOffset(pos);
+      value = value.slice(0, offset) + text + value.slice(offset);
+    },
+    setCursor(pos) { caret = pos; },
+    focus() { focused = true; },
+  };
+  const target = new MarkdownView("目标.md", editor);
+  const other = new MarkdownView("第一个标签.md", { replaceRange() { throw new Error("wrong tab"); } });
+  let recent = target;
+  const drawer = Object.assign(Object.create(ScratchpadView.prototype), { app: { workspace: {
+    getActiveViewOfType: () => null,
+    getLeavesOfType: () => [{ view: other }, { view: target }],
+    getMostRecentLeaf: () => ({ view: recent }),
+  } } });
+  drawer.insertToActiveEditor("灵感");
+  assert("抽屉取得焦点后，仍插入最近正文标签的第二行中间，并将光标放在插入文字之后",
+    value === "第一行\n前灵感\n\n后\n末行" && caret?.line === 3 && caret.ch === 0 && focused);
+  recent = new MarkdownView("只读.md", other.editor, "preview");
+  drawer.insertToActiveEditor("不应插入");
+  assert("最近标签处于阅读视图时提示用户，不向其他标签写入",
+    notices.at(-1)?.includes("编辑视图") && !value.includes("不应插入"));
+}
+
 async function testWindowsCliDetection() {
   const prefix = "C:\\Users\\Writer\\AppData\\Roaming\\npm";
   const executable = path.win32.join(prefix, "node_modules", "@openai", "codex", "node_modules", "@openai",

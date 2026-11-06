@@ -93,20 +93,10 @@ export class ScratchpadView extends ItemView {
     await this.renderItems();
   }
 
-  /**
-   * 获取最近活跃的 Markdown 视图（彻底根治侧边栏夺走焦点导致 getActiveViewOfType 为空的 Bug）
-   */
   private getRecentMarkdownView(): MarkdownView | null {
-    const active = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (active) return active;
-
-    const leaves = this.app.workspace.getLeavesOfType("markdown");
-    for (const leaf of leaves) {
-      if (leaf.view instanceof MarkdownView && leaf.view.file) {
-        return leaf.view;
-      }
-    }
-    return null;
+    // The sidebar can take focus. Obsidian retains the most recent document leaf.
+    const view = this.app.workspace.getMostRecentLeaf()?.view;
+    return view instanceof MarkdownView && view.file ? view : null;
   }
 
   private async renderItems() {
@@ -194,15 +184,18 @@ export class ScratchpadView extends ItemView {
    */
   private insertToActiveEditor(text: string) {
     const targetView = this.getRecentMarkdownView();
-    if (!targetView) {
-      new Notice("请先在主窗口中打开一篇 Markdown 文稿");
+    if (!targetView || targetView.getMode() !== "source") {
+      new Notice("请先在 Markdown 文稿的编辑视图中放置光标。");
       return;
     }
 
     const editor = targetView.editor;
-    const cursor = editor.getCursor();
-    editor.replaceRange(text + "\n\n", cursor);
-    targetView.editor.focus(); // 主动将光标焦点移回正文编辑区
+    const cursor = editor.getCursor("head");
+    const inserted = text + "\n\n";
+    const end = editor.posToOffset(cursor) + inserted.length;
+    editor.replaceRange(inserted, cursor);
+    editor.setCursor(editor.offsetToPos(end));
+    editor.focus();
     new Notice("已成功插入正文！");
   }
 }
